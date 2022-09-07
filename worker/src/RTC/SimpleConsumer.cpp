@@ -23,6 +23,102 @@ namespace RTC
 		if (this->consumableRtpEncodings.size() != 1u)
 			MS_THROW_TYPE_ERROR("invalid consumableRtpEncodings with size != 1");
 
+        auto jsonRtpMappingIt = data.find("consumerRtpMapping");
+
+        if (jsonRtpMappingIt != data.end())
+        {
+            if(!jsonRtpMappingIt->is_object())
+                MS_THROW_TYPE_ERROR("wrong consumerRtpMapping (not an object)");
+
+            auto jsonCodecsIt = jsonRtpMappingIt->find("codecs");
+
+            if (jsonCodecsIt == jsonRtpMappingIt->end() || !jsonCodecsIt->is_array())
+            {
+                MS_THROW_TYPE_ERROR("missing consumerRtpMapping.codecs");
+            }
+
+            for (auto& codec : *jsonCodecsIt)
+            {
+                if (!codec.is_object())
+                {
+                    MS_THROW_TYPE_ERROR("wrong entry in consumerRtpMapping.codecs (not an object)");
+                }
+
+                auto jsonPayloadTypeIt = codec.find("payloadType");
+
+                // clang-format off
+                if (
+                    jsonPayloadTypeIt == codec.end() ||
+                        !Utils::Json::IsPositiveInteger(*jsonPayloadTypeIt)
+                    )
+                    // clang-format on
+                {
+                    MS_THROW_TYPE_ERROR("wrong entry in consumerRtpMapping.codecs (missing payloadType)");
+                }
+
+                auto jsonMappedPayloadTypeIt = codec.find("mappedPayloadType");
+
+                // clang-format off
+                if (
+                    jsonMappedPayloadTypeIt == codec.end() ||
+                        !Utils::Json::IsPositiveInteger(*jsonMappedPayloadTypeIt)
+                    )
+                    // clang-format on
+                {
+                    MS_THROW_TYPE_ERROR("wrong entry in consumerRtpMapping.codecs (missing mappedPayloadType)");
+                }
+
+                MS_DEBUG_TAG(rtp, "RTP payload type mapping received: %d -> %d", jsonPayloadTypeIt->get<uint8_t>(), jsonMappedPayloadTypeIt->get<uint8_t>());
+
+                this->consumerRtpMapping.codecs[jsonPayloadTypeIt->get<uint8_t>()] =
+                    jsonMappedPayloadTypeIt->get<uint8_t>();
+            }
+
+            auto jsonHeaderExtensionsIt = jsonRtpMappingIt->find("headerExtensions");
+
+            if (jsonHeaderExtensionsIt == jsonRtpMappingIt->end() || !jsonHeaderExtensionsIt->is_array())
+            {
+                MS_THROW_TYPE_ERROR("missing consumerRtpMapping.jsonHeaderExtensionsIt");
+            }
+
+            for (auto& headerExtension : *jsonHeaderExtensionsIt)
+            {
+                if (!headerExtension.is_object())
+                {
+                    MS_THROW_TYPE_ERROR("wrong entry in consumerRtpMapping.headerExtensions (not an object)");
+                }
+
+                auto jsonIdIt = headerExtension.find("id");
+
+                // clang-format off
+                if (
+                    jsonIdIt == headerExtension.end() ||
+                        !Utils::Json::IsPositiveInteger(*jsonIdIt)
+                    )
+                    // clang-format on
+                {
+                    MS_THROW_TYPE_ERROR("wrong entry in consumerRtpMapping.headerExtensions (missing id)");
+                }
+
+                auto jsonMappedIdIt = headerExtension.find("mappedId");
+
+                // clang-format off
+                if (
+                    jsonMappedIdIt == headerExtension.end() ||
+                        !Utils::Json::IsPositiveInteger(*jsonMappedIdIt)
+                    )
+                    // clang-format on
+                {
+                    MS_THROW_TYPE_ERROR("wrong entry in consumerRtpMapping.headerExtensions (missing mappedId)");
+                }
+
+                MS_DEBUG_TAG(rtp, "Header extension mapping received: %d -> %d", jsonIdIt->get<uint8_t>(), jsonMappedIdIt->get<uint8_t>());
+
+                this->consumerRtpMapping.headerExtensions[jsonIdIt->get<uint8_t>()] =
+                    jsonMappedIdIt->get<uint8_t>();
+            }
+        }
+
 		auto& encoding         = this->rtpParameters.encodings[0];
 		const auto* mediaCodec = this->rtpParameters.GetCodecForEncoding(encoding);
 
@@ -75,6 +171,52 @@ namespace RTC
 
 		// Call the parent method.
 		RTC::Consumer::FillJson(jsonObject);
+
+        // Add consumerRtpMapping.
+        jsonObject["consumerRtpMapping"] = json::object();
+        auto jsonRtpMappingIt            = jsonObject.find("consumerRtpMapping");
+
+        // Add consumerRtpMapping.codecs.
+        {
+            (*jsonRtpMappingIt)["codecs"] = json::array();
+            auto jsonCodecsIt             = jsonRtpMappingIt->find("codecs");
+            size_t idx{ 0 };
+
+            for (auto& kv : this->consumerRtpMapping.codecs)
+            {
+                jsonCodecsIt->emplace_back(json::value_t::object);
+
+                auto& jsonEntry        = (*jsonCodecsIt)[idx];
+                auto payloadType       = kv.first;
+                auto mappedPayloadType = kv.second;
+
+                jsonEntry["payloadType"]       = payloadType;
+                jsonEntry["mappedPayloadType"] = mappedPayloadType;
+
+                ++idx;
+            }
+        }
+
+        // Add consumerRtpMapping.headerExtensions.
+        {
+            (*jsonRtpMappingIt)["headerExtensions"] = json::array();
+            auto jsonCodecsIt                       = jsonRtpMappingIt->find("headerExtensions");
+            size_t idx{ 0 };
+
+            for (auto& kv : this->consumerRtpMapping.headerExtensions)
+            {
+                jsonCodecsIt->emplace_back(json::value_t::object);
+
+                auto& jsonEntry = (*jsonCodecsIt)[idx];
+                auto id         = kv.first;
+                auto mappedId   = kv.second;
+
+                jsonEntry["id"]       = id;
+                jsonEntry["mappedId"] = mappedId;
+
+                ++idx;
+            }
+        }
 
 		// Add rtpStream.
 		this->rtpStream->FillJson(jsonObject["rtpStream"]);
@@ -320,10 +462,14 @@ namespace RTC
 		// Save original packet fields.
 		auto origSsrc = packet->GetSsrc();
 		auto origSeq  = packet->GetSequenceNumber();
+        auto origPayloadType  = packet->GetPayloadType();
 
 		// Rewrite packet.
 		packet->SetSsrc(this->rtpParameters.encodings[0].ssrc);
 		packet->SetSequenceNumber(seq);
+        packet->SetPayloadType(this->rtpStream->GetPayloadType());
+
+        MapRTPHeaderExtensions(packet, false);
 
 		if (isSyncPacket)
 		{
@@ -361,6 +507,9 @@ namespace RTC
 		// Restore packet fields.
 		packet->SetSsrc(origSsrc);
 		packet->SetSequenceNumber(origSeq);
+        packet->SetPayloadType(origPayloadType);
+
+        MapRTPHeaderExtensions(packet, true);
 	}
 
 	void SimpleConsumer::GetRtcp(
@@ -543,6 +692,17 @@ namespace RTC
 		params.clockRate   = mediaCodec->clockRate;
 		params.cname       = this->rtpParameters.rtcp.cname;
 
+        // Map payload type
+        {
+            auto it = this->consumerRtpMapping.codecs.find(mediaCodec->payloadType);
+            if (it != this->consumerRtpMapping.codecs.end())
+            {
+                MS_DEBUG_TAG(rtp, "Mapping RTP payload type %d -> %d", params.payloadType, it->second);
+
+                params.payloadType = it->second;
+            }
+        }
+
 		// Check in band FEC in codec parameters.
 		if (mediaCodec->parameters.HasInteger("useinbandfec") && mediaCodec->parameters.GetInteger("useinbandfec") == 1)
 		{
@@ -599,7 +759,19 @@ namespace RTC
 		const auto* rtxCodec = this->rtpParameters.GetRtxCodecForEncoding(encoding);
 
 		if (rtxCodec && encoding.hasRtx)
-			this->rtpStream->SetRtx(rtxCodec->payloadType, encoding.rtx.ssrc);
+        {
+            // Map rtx payload type
+            auto rtxPayloadType = rtxCodec->payloadType;
+
+            auto it = this->consumerRtpMapping.codecs.find(rtxPayloadType);
+            if (it != this->consumerRtpMapping.codecs.end()) {
+                MS_DEBUG_TAG(rtp, "Mapping RTX RTP payload type %d -> %d", rtxPayloadType, it->second);
+
+                rtxPayloadType = it->second;
+            }
+
+            this->rtpStream->SetRtx(rtxPayloadType, encoding.rtx.ssrc);
+        }
 	}
 
 	void SimpleConsumer::RequestKeyFrame()
@@ -644,4 +816,41 @@ namespace RTC
 		// May emit 'trace' event.
 		EmitTraceEventRtpAndKeyFrameTypes(packet, this->rtpStream->HasRtx());
 	}
+
+    void SimpleConsumer::MapRTPHeaderExtensions(RTC::RtpPacket *packet, bool reverse) const
+    {
+        // Map Header extensions by swapping them around
+        // Algorithm:
+        // 1. Build arrays of source (vIdA) and destination (vIdB) indexes
+        // 2. For each element of vIdA:
+        //      a. swap [vIdA] <-> [vIdB]
+        //      b. in remaining vIdA, replace index equal to current destination to current source
+
+        if(consumerRtpMapping.headerExtensions.empty())
+            return;
+
+        std::vector<uint8_t> vIdA;
+        vIdA.reserve(this->consumerRtpMapping.headerExtensions.size());
+        std::vector<uint8_t> vIdB;
+        vIdB.reserve(this->consumerRtpMapping.headerExtensions.size());
+        for(const auto extmap : this->consumerRtpMapping.headerExtensions)
+        {
+            vIdA.emplace_back(reverse ? extmap.second : extmap.first);
+            vIdB.emplace_back(reverse ? extmap.first  : extmap.second);
+        }
+
+        for(size_t i = 0; i < vIdA.size(); ++i)
+        {
+            packet->SwapExtensions(vIdA[i], vIdB[i]);
+
+            for(size_t j = i; j < vIdA.size(); ++j)
+            {
+                if(vIdA[j] == vIdB[i])
+                {
+                    vIdA[j] = vIdA[i];
+                    break;
+                }
+            }
+        }
+    }
 } // namespace RTC

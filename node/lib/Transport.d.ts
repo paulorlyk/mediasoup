@@ -183,7 +183,7 @@ export declare class Transport<Events extends TransportEvents = TransportEvents,
      *
      * @virtual
      */
-    consume({ producerId, rtpCapabilities, paused, mid, preferredLayers, ignoreDtx, pipe, appData }: ConsumerOptions): Promise<Consumer>;
+    consume({ producerId, rtpCapabilities, consumerRtpMapping, paused, mid, preferredLayers, ignoreDtx, pipe, appData }: ConsumerOptions): Promise<Consumer>;
     /**
      * Create a DataProducer.
      */

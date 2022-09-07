@@ -14,6 +14,7 @@ export declare type ConsumerOptions = {
      * RTP capabilities of the consuming endpoint.
      */
     rtpCapabilities: RtpCapabilities;
+    consumerRtpMapping?: ConsumerRtpMapping;
     /**
      * Whether the Consumer must start in paused mode. Default false.
      *
@@ -149,6 +150,16 @@ export declare type ConsumerObserverEvents = {
     score: [ConsumerScore];
     layerschange: [ConsumerLayers?];
     trace: [ConsumerTraceEventData];
+};
+export declare type ConsumerRtpMapping = {
+    codecs: {
+        payloadType: number;
+        mappedPayloadType: number;
+    }[];
+    headerExtensions: {
+        id: number;
+        mappedId: number;
+    }[];
 };
 declare type ConsumerInternal = TransportInternal & {
     consumerId: string;

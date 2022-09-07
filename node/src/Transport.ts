@@ -22,7 +22,7 @@ import {
 	DataConsumerOptions,
 	DataConsumerType
 } from './DataConsumer';
-import { RtpCapabilities } from './RtpParameters';
+import {RtpCapabilities, RtpParameters} from './RtpParameters';
 import { SctpStreamParameters } from './SctpParameters';
 
 export interface TransportListenIp
@@ -644,6 +644,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		{
 			producerId,
 			rtpCapabilities,
+			consumerRtpMapping,
 			paused = false,
 			mid,
 			preferredLayers,
@@ -671,8 +672,8 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			throw Error(`Producer with id "${producerId}" not found`);
 
 		// This may throw.
-		const rtpParameters = ortc.getConsumerRtpParameters(
-			producer.consumableRtpParameters, rtpCapabilities!, pipe);
+		const rtpParameters : RtpParameters = utils.clone(ortc.getConsumerRtpParameters(
+			producer.consumableRtpParameters, rtpCapabilities!, pipe));
 
 		// Set MID.
 		if (!pipe)
@@ -702,6 +703,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			producerId,
 			kind                   : producer.kind,
 			rtpParameters,
+			consumerRtpMapping,
 			type                   : pipe ? 'pipe' : producer.type,
 			consumableRtpEncodings : producer.consumableRtpParameters.encodings,
 			paused,
@@ -711,6 +713,35 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 
 		const status =
 			await this.channel.request('transport.consume', this.internal.transportId, reqData);
+
+		// Update codec payloadType and apt according to consumerRtpMapping
+		rtpParameters.codecs.forEach((codec) => {
+			const mapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === codec.payloadType);
+			if(mapping)
+				codec.payloadType = mapping.mappedPayloadType;
+
+			if(codec?.parameters?.apt) {
+				const aptMapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === codec.parameters.apt);
+				if(aptMapping)
+					codec.parameters.apt = aptMapping.mappedPayloadType;
+			}
+		});
+
+		// Update encodings codecPayloadType according to consumerRtpMapping
+		rtpParameters.encodings?.forEach((encoding) => {
+			if(encoding.codecPayloadType) {
+				const mapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === encoding.codecPayloadType);
+				if(mapping)
+					encoding.codecPayloadType = mapping.mappedPayloadType;
+			}
+		});
+
+		// Update header extension IDs according to consumerRtpMapping
+		rtpParameters.headerExtensions?.forEach((headerExtension) => {
+			const mapping = consumerRtpMapping?.headerExtensions.find((he) => he.id === headerExtension.id);
+			if(mapping)
+				headerExtension.id = mapping.mappedId;
+		});
 
 		const data =
 		{

@@ -955,4 +955,87 @@ namespace RTC
 			}
 		}
 	}
+
+    void RtpPacket::SwapExtensions(uint8_t idA, uint8_t idB)
+    {
+        MS_TRACE();
+
+        if(idA == 0u || idB == 0u || idA == idB)
+            return;
+
+        if (HasOneByteExtensions())
+        {
+            if(idA > 14 || idB > 14)
+                return;
+
+            // `-1` because we have 14 elements total 0..13 and `id` is in the range 1..14.
+            auto* extensionA = this->oneByteExtensions[idA - 1];
+            if(extensionA)
+                extensionA->id = idB;
+
+            auto* extensionB = this->oneByteExtensions[idB - 1];
+            if(extensionB)
+                extensionB->id = idA;
+
+            this->oneByteExtensions[idA - 1] = extensionB;
+            this->oneByteExtensions[idB - 1] = extensionA;
+        }
+        else if (HasTwoBytesExtensions())
+        {
+            auto itA = this->mapTwoBytesExtensions.find(idA);
+            auto itB = this->mapTwoBytesExtensions.find(idB);
+
+            TwoBytesExtension* extensionA = nullptr;
+            if (itA != this->mapTwoBytesExtensions.end())
+            {
+                extensionA = itA->second;
+                extensionA->id =idB;
+            }
+
+            TwoBytesExtension* extensionB = nullptr;
+            if (itB != this->mapTwoBytesExtensions.end())
+            {
+                extensionB = itB->second;
+                extensionB->id =idA;
+            }
+
+            if(extensionA)
+                this->mapTwoBytesExtensions[idB] = extensionA;
+            else
+                this->mapTwoBytesExtensions.erase(itB);
+
+            if(extensionB)
+                this->mapTwoBytesExtensions[idA] = extensionB;
+            else
+                this->mapTwoBytesExtensions.erase(itA);
+        }
+
+        // TODO: Do we really need to map extension IDs?
+        uint8_t* ids[] = {
+            &this->midExtensionId,
+            &this->ridExtensionId,
+            &this->rridExtensionId,
+            &this->absSendTimeExtensionId,
+            &this->transportWideCc01ExtensionId,
+            &this->frameMarking07ExtensionId,
+            &this->frameMarkingExtensionId,
+            &this->ssrcAudioLevelExtensionId,
+            &this->videoOrientationExtensionId,
+        };
+
+        uint8_t* pIdA = nullptr;
+        uint8_t* pIdB = nullptr;
+        for(auto* pId : ids)
+        {
+            if(*pId == idA)
+                pIdA = pId;
+            if(*pId == idB)
+                pIdB = pId;
+        }
+
+        if(pIdA)
+            *pIdA = idB;
+        if(pIdB)
+            *pIdB = idA;
+    }
 } // namespace RTC

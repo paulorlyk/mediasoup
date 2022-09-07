@@ -548,6 +548,8 @@ namespace RTC
 
 		bool SetExtensionLength(uint8_t id, uint8_t len);
 
+        void SwapExtensions(uint8_t idA, uint8_t idB);
+
 		uint8_t* GetPayload() const
 		{
 			return this->payloadLength != 0u ? this->payload : nullptr;

@@ -355,7 +355,7 @@ class Transport extends EnhancedEventEmitter_1.EnhancedEventEmitter {
      *
      * @virtual
      */
-    async consume({ producerId, rtpCapabilities, paused = false, mid, preferredLayers, ignoreDtx = false, pipe = false, appData }) {
+    async consume({ producerId, rtpCapabilities, consumerRtpMapping, paused = false, mid, preferredLayers, ignoreDtx = false, pipe = false, appData }) {
         logger.debug('consume()');
         if (!producerId || typeof producerId !== 'string')
             throw new TypeError('missing producerId');
@@ -369,7 +369,7 @@ class Transport extends EnhancedEventEmitter_1.EnhancedEventEmitter {
         if (!producer)
             throw Error(`Producer with id "${producerId}" not found`);
         // This may throw.
-        const rtpParameters = ortc.getConsumerRtpParameters(producer.consumableRtpParameters, rtpCapabilities, pipe);
+        const rtpParameters = utils.clone(ortc.getConsumerRtpParameters(producer.consumableRtpParameters, rtpCapabilities, pipe));
         // Set MID.
         if (!pipe) {
             if (mid) {
@@ -389,6 +389,7 @@ class Transport extends EnhancedEventEmitter_1.EnhancedEventEmitter {
             producerId,
             kind: producer.kind,
             rtpParameters,
+            consumerRtpMapping,
             type: pipe ? 'pipe' : producer.type,
             consumableRtpEncodings: producer.consumableRtpParameters.encodings,
             paused,
@@ -396,6 +397,31 @@ class Transport extends EnhancedEventEmitter_1.EnhancedEventEmitter {
             ignoreDtx
         };
         const status = await this.channel.request('transport.consume', this.internal.transportId, reqData);
+        // Update codec payloadType and apt according to consumerRtpMapping
+        rtpParameters.codecs.forEach((codec) => {
+            const mapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === codec.payloadType);
+            if (mapping)
+                codec.payloadType = mapping.mappedPayloadType;
+            if (codec?.parameters?.apt) {
+                const aptMapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === codec.parameters.apt);
+                if (aptMapping)
+                    codec.parameters.apt = aptMapping.mappedPayloadType;
+            }
+        });
+        // Update encodings codecPayloadType according to consumerRtpMapping
+        rtpParameters.encodings?.forEach((encoding) => {
+            if (encoding.codecPayloadType) {
+                const mapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === encoding.codecPayloadType);
+                if (mapping)
+                    encoding.codecPayloadType = mapping.mappedPayloadType;
+            }
+        });
+        // Update header extension IDs according to consumerRtpMapping
+        rtpParameters.headerExtensions?.forEach((headerExtension) => {
+            const mapping = consumerRtpMapping?.headerExtensions.find((he) => he.id === headerExtension.id);
+            if (mapping)
+                headerExtension.id = mapping.mappedId;
+        });
         const data = {
             producerId,
             kind: producer.kind,

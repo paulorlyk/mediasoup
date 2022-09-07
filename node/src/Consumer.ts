@@ -22,6 +22,8 @@ export type ConsumerOptions =
 	 */
 	rtpCapabilities: RtpCapabilities;
 
+	consumerRtpMapping?: ConsumerRtpMapping;
+
 	/**
 	 * Whether the Consumer must start in paused mode. Default false.
 	 *
@@ -184,6 +186,21 @@ export type ConsumerObserverEvents =
 	score: [ConsumerScore];
 	layerschange: [ConsumerLayers?];
 	trace: [ConsumerTraceEventData];
+};
+
+export type ConsumerRtpMapping =
+{
+	codecs:
+	{
+		payloadType: number;
+		mappedPayloadType: number;
+	}[];
+
+	headerExtensions:
+	{
+		id: number;
+		mappedId: number;
+	}[];
 };
 
 type ConsumerInternal = TransportInternal &
