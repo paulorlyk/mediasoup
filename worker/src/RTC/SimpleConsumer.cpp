@@ -829,21 +829,33 @@ namespace RTC
         if(consumerRtpMapping.headerExtensions.empty())
             return;
 
-        std::vector<uint8_t> vIdA;
-        vIdA.reserve(this->consumerRtpMapping.headerExtensions.size());
-        std::vector<uint8_t> vIdB;
-        vIdB.reserve(this->consumerRtpMapping.headerExtensions.size());
+        const int maxMoves = 128;
+
+        uint8_t vIdA[maxMoves] = {};
+        uint8_t vIdB[maxMoves] = {};
+        int nMoves = 0;
         for(const auto extmap : this->consumerRtpMapping.headerExtensions)
         {
-            vIdA.emplace_back(reverse ? extmap.second : extmap.first);
-            vIdB.emplace_back(reverse ? extmap.first  : extmap.second);
+            vIdA[nMoves] = reverse ? extmap.second : extmap.first;
+            vIdB[nMoves] = reverse ? extmap.first  : extmap.second;
+            ++nMoves;
+
+            if(nMoves >= maxMoves)
+            {
+                MS_WARN_TAG(
+                    rtp,
+                    "RTP header extension map is too big - truncating to %d elements",
+                    maxMoves);
+
+                break;
+            }
         }
 
-        for(size_t i = 0; i < vIdA.size(); ++i)
+        for(int i = 0; i < nMoves; ++i)
         {
             packet->SwapExtensions(vIdA[i], vIdB[i]);
 
-            for(size_t j = i; j < vIdA.size(); ++j)
+            for(int j = i; j < nMoves; ++j)
             {
                 if(vIdA[j] == vIdB[i])
                 {
