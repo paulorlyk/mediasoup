@@ -72,12 +72,12 @@ namespace RTC
 		void OnRtpStreamScore(RTC::RtpStream* rtpStream, uint8_t score, uint8_t previousScore) override;
 		void OnRtpStreamRetransmitRtpPacket(RTC::RtpStreamSend* rtpStream, RTC::RtpPacket* packet) override;
 
-    private:
-        struct ConsumerRtpMapping
-        {
-            absl::flat_hash_map<uint8_t, uint8_t> codecs;
-            absl::flat_hash_map<uint8_t, uint8_t> headerExtensions;
-        };
+	private:
+		struct ConsumerRtpMapping
+		{
+			absl::flat_hash_map<uint8_t, uint8_t> codecs;
+			absl::flat_hash_map<uint8_t, uint8_t> headerExtensions;
+		};
 
 	private:
 		// Allocated by this.
@@ -90,7 +90,7 @@ namespace RTC
 		RTC::SeqManager<uint16_t> rtpSeqManager;
 		bool managingBitrate{ false };
 		std::unique_ptr<RTC::Codecs::EncodingContext> encodingContext;
-        struct ConsumerRtpMapping consumerRtpMapping;
+		struct ConsumerRtpMapping consumerRtpMapping;
 	};
 } // namespace RTC
 

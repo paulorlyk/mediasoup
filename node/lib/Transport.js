@@ -398,30 +398,34 @@ class Transport extends EnhancedEventEmitter_1.EnhancedEventEmitter {
         };
         const status = await this.channel.request('transport.consume', this.internal.transportId, reqData);
         // Update codec payloadType and apt according to consumerRtpMapping
-        rtpParameters.codecs.forEach((codec) => {
-            const mapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === codec.payloadType);
+        for (const codec of rtpParameters.codecs) {
+            const mapping = consumerRtpMapping?.codecs
+                .find((c) => c.payloadType === codec.payloadType);
             if (mapping)
                 codec.payloadType = mapping.mappedPayloadType;
             if (codec?.parameters?.apt) {
-                const aptMapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === codec.parameters.apt);
+                const aptMapping = consumerRtpMapping?.codecs
+                    .find((c) => c.payloadType === codec.parameters.apt);
                 if (aptMapping)
                     codec.parameters.apt = aptMapping.mappedPayloadType;
             }
-        });
+        }
         // Update encodings codecPayloadType according to consumerRtpMapping
-        rtpParameters.encodings?.forEach((encoding) => {
+        for (const encoding of rtpParameters.encodings ?? []) {
             if (encoding.codecPayloadType) {
-                const mapping = consumerRtpMapping?.codecs.find((c) => c.payloadType === encoding.codecPayloadType);
+                const mapping = consumerRtpMapping?.codecs
+                    .find((c) => c.payloadType === encoding.codecPayloadType);
                 if (mapping)
                     encoding.codecPayloadType = mapping.mappedPayloadType;
             }
-        });
+        }
         // Update header extension IDs according to consumerRtpMapping
-        rtpParameters.headerExtensions?.forEach((headerExtension) => {
-            const mapping = consumerRtpMapping?.headerExtensions.find((he) => he.id === headerExtension.id);
+        for (const headerExtension of rtpParameters.headerExtensions ?? []) {
+            const mapping = consumerRtpMapping?.headerExtensions
+                .find((he) => he.id === headerExtension.id);
             if (mapping)
                 headerExtension.id = mapping.mappedId;
-        });
+        }
         const data = {
             producerId,
             kind: producer.kind,
