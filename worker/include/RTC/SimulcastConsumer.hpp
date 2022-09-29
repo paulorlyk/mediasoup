@@ -3,6 +3,7 @@
 
 #include "RTC/Codecs/PayloadDescriptorHandler.hpp"
 #include "RTC/Consumer.hpp"
+#include "RTC/ConsumerRtpMapping.hpp"
 #include "RTC/RtpStreamSend.hpp"
 #include "RTC/SeqManager.hpp"
 
@@ -122,6 +123,7 @@ namespace RTC
 		uint32_t tsOffset{ 0u }; // RTP Timestamp offset.
 		bool keyFrameForTsOffsetRequested{ false };
 		uint64_t lastBweDowngradeAtMs{ 0u }; // Last time we moved to lower spatial layer due to BWE.
+		RTC::ConsumerRtpMapping consumerRtpMapping;
 	};
 } // namespace RTC
 

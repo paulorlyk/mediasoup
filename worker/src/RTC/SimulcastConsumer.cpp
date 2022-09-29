@@ -23,7 +23,8 @@ namespace RTC
 
 	SimulcastConsumer::SimulcastConsumer(
 	  const std::string& id, const std::string& producerId, RTC::Consumer::Listener* listener, json& data)
-	  : RTC::Consumer::Consumer(id, producerId, listener, data, RTC::RtpParameters::Type::SIMULCAST)
+	  : RTC::Consumer::Consumer(id, producerId, listener, data, RTC::RtpParameters::Type::SIMULCAST),
+	    consumerRtpMapping(data)
 	{
 		MS_TRACE();
 
@@ -147,6 +148,9 @@ namespace RTC
 
 		// Add rtpStream.
 		this->rtpStream->FillJson(jsonObject["rtpStream"]);
+
+		// Add consumerRtpMapping.
+		consumerRtpMapping.FillJson(jsonObject);
 
 		// Add preferredSpatialLayer.
 		jsonObject["preferredSpatialLayer"] = this->preferredSpatialLayer;
@@ -899,14 +903,18 @@ namespace RTC
 		this->rtpSeqManager.Input(packet->GetSequenceNumber(), seq);
 
 		// Save original packet fields.
-		auto origSsrc      = packet->GetSsrc();
-		auto origSeq       = packet->GetSequenceNumber();
-		auto origTimestamp = packet->GetTimestamp();
+		auto origSsrc        = packet->GetSsrc();
+		auto origSeq         = packet->GetSequenceNumber();
+		auto origTimestamp   = packet->GetTimestamp();
+		auto origPayloadType = packet->GetPayloadType();
 
 		// Rewrite packet.
 		packet->SetSsrc(this->rtpParameters.encodings[0].ssrc);
 		packet->SetSequenceNumber(seq);
 		packet->SetTimestamp(timestamp);
+		packet->SetPayloadType(this->rtpStream->GetPayloadType());
+
+		this->consumerRtpMapping.MapRTPHeaderExtensions(packet, false);
 
 		if (isSyncPacket)
 		{
@@ -952,6 +960,9 @@ namespace RTC
 		packet->SetSsrc(origSsrc);
 		packet->SetSequenceNumber(origSeq);
 		packet->SetTimestamp(origTimestamp);
+		packet->SetPayloadType(origPayloadType);
+
+		this->consumerRtpMapping.MapRTPHeaderExtensions(packet, true);
 
 		// Restore the original payload if needed.
 		packet->RestorePayload();
@@ -1145,7 +1156,7 @@ namespace RTC
 		RTC::RtpStream::Params params;
 
 		params.ssrc           = encoding.ssrc;
-		params.payloadType    = mediaCodec->payloadType;
+		params.payloadType    = this->consumerRtpMapping.MapPayloadType(mediaCodec->payloadType);
 		params.mimeType       = mediaCodec->mimeType;
 		params.clockRate      = mediaCodec->clockRate;
 		params.cname          = this->rtpParameters.rtcp.cname;
@@ -1208,7 +1219,8 @@ namespace RTC
 		const auto* rtxCodec = this->rtpParameters.GetRtxCodecForEncoding(encoding);
 
 		if (rtxCodec && encoding.hasRtx)
-			this->rtpStream->SetRtx(rtxCodec->payloadType, encoding.rtx.ssrc);
+			this->rtpStream->SetRtx(
+			  this->consumerRtpMapping.MapPayloadType(rtxCodec->payloadType), encoding.rtx.ssrc);
 	}
 
 	void SimulcastConsumer::RequestKeyFrames()
