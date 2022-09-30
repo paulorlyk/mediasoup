@@ -135,7 +135,7 @@ namespace RTC
 			auto jsonCodecsIt             = jsonRtpMappingIt->find("codecs");
 			size_t idx{ 0 };
 
-			for (auto& kv : this->codecs)
+			for (const auto& kv : this->codecs)
 			{
 				jsonCodecsIt->emplace_back(json::value_t::object);
 
@@ -156,7 +156,7 @@ namespace RTC
 			auto jsonCodecsIt                       = jsonRtpMappingIt->find("headerExtensions");
 			size_t idx{ 0 };
 
-			for (auto& kv : this->headerExtensions)
+			for (const auto& kv : this->headerExtensions)
 			{
 				jsonCodecsIt->emplace_back(json::value_t::object);
 
@@ -189,16 +189,15 @@ namespace RTC
 		uint8_t vIdA[maxMoves] = {};
 		uint8_t vIdB[maxMoves] = {};
 		int nMoves             = 0;
-		for (const auto extmap : this->headerExtensions)
+		for (const auto kv : this->headerExtensions)
 		{
-			vIdA[nMoves] = reverse ? extmap.second : extmap.first;
-			vIdB[nMoves] = reverse ? extmap.first : extmap.second;
+			vIdA[nMoves] = reverse ? kv.second : kv.first;
+			vIdB[nMoves] = reverse ? kv.first : kv.second;
 			++nMoves;
 
 			if (nMoves >= maxMoves)
 			{
 				MS_WARN_TAG(rtp, "RTP header extension map is too big - truncating to %d elements", maxMoves);
-
 				break;
 			}
 		}
