@@ -618,8 +618,7 @@ namespace RTC
 
 				request->Accept();
 
-				if (this->tccServer)
-					this->tccServer->SetMaxIncomingBitrate(this->maxIncomingBitrate);
+                UpdateMaxIncomingBitrate();
 
 				break;
 			}
@@ -813,8 +812,7 @@ namespace RTC
 					{
 						this->tccServer = new RTC::TransportCongestionControlServer(this, bweType, RTC::MtuSize);
 
-						if (this->maxIncomingBitrate != 0u)
-							this->tccServer->SetMaxIncomingBitrate(this->maxIncomingBitrate);
+						UpdateMaxIncomingBitrate();
 
 						if (IsConnected())
 							this->tccServer->TransportConnected();
@@ -3070,4 +3068,31 @@ namespace RTC
 			this->rtcpTimer->Start(interval);
 		}
 	}
+
+    void Transport::SetTargetIncomingBitrate(uint32_t bitrate)
+    {
+        MS_TRACE();
+
+        if(this->targetIncomingBitrate != bitrate)
+        {
+            this->targetIncomingBitrate = bitrate;
+            UpdateMaxIncomingBitrate();
+        }
+    }
+
+    inline void Transport::UpdateMaxIncomingBitrate()
+    {
+        MS_TRACE();
+
+        if(!this->tccServer)
+            return;
+
+        auto bitrate = this->targetIncomingBitrate;
+
+        if(bitrate == 0u || bitrate > this->maxIncomingBitrate)
+            bitrate = this->maxIncomingBitrate;
+
+        this->tccServer->SetMaxIncomingBitrate(bitrate);
+    }
+
 } // namespace RTC

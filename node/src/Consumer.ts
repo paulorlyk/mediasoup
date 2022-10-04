@@ -24,6 +24,8 @@ export type ConsumerOptions =
 
 	consumerRtpMapping?: ConsumerRtpMapping;
 
+	producerBweFeedback?: boolean;
+
 	/**
 	 * Whether the Consumer must start in paused mode. Default false.
 	 *

@@ -698,11 +698,14 @@ namespace RTC
 	}
 
 	inline void Router::OnTransportProducerRtpPacketReceived(
-	  RTC::Transport* /*transport*/, RTC::Producer* producer, RTC::RtpPacket* packet)
+	  RTC::Transport* transport, RTC::Producer* producer, RTC::RtpPacket* packet)
 	{
 		MS_TRACE();
 
 		auto& consumers = this->mapProducerConsumers.at(producer);
+
+        uint32_t currentMaxBitrate = 0u;
+        bool updateMaxBitrate = false;
 
 		if (!consumers.empty())
 		{
@@ -719,6 +722,17 @@ namespace RTC
 				if (!mid.empty())
 					packet->UpdateMid(mid);
 
+                // Only gather BWE feedback from video consumers
+                if(consumer->GetKind() == RTC::Media::Kind::VIDEO)
+                {
+                    const auto consumerCurrentMaxBitrate = consumer->GetCurrentMaxBitrate();
+
+                    if(currentMaxBitrate == 0u || consumerCurrentMaxBitrate < currentMaxBitrate)
+                        currentMaxBitrate = consumerCurrentMaxBitrate;
+
+                    updateMaxBitrate = true;
+                }
+
 				consumer->SendRtpPacket(packet, sharedPacket);
 			}
 		}
@@ -734,6 +748,10 @@ namespace RTC
 				rtpObserver->ReceiveRtpPacket(producer, packet);
 			}
 		}
+
+        // TODO: Probably no need to do this so often
+        if(updateMaxBitrate)
+            transport->SetTargetIncomingBitrate(currentMaxBitrate);
 	}
 
 	inline void Router::OnTransportNeedWorstRemoteFractionLost(

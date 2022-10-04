@@ -20,6 +20,11 @@ namespace RTC
 	{
 		MS_TRACE();
 
+        auto jsonProducerBweFeedbackIt = data.find("producerBweFeedback");
+
+        if (jsonProducerBweFeedbackIt != data.end() && jsonProducerBweFeedbackIt->is_boolean())
+            this->producerBweFeedback = jsonProducerBweFeedbackIt->get<bool>();
+
 		// Ensure there is a single encoding.
 		if (this->consumableRtpEncodings.size() != 1u)
 			MS_THROW_TYPE_ERROR("invalid consumableRtpEncodings with size != 1");
@@ -212,6 +217,15 @@ namespace RTC
 			return 0u;
 
 		this->managingBitrate = true;
+
+        if(this->producerBweFeedback && this->currentMaxBitrate != bitrate)
+        {
+            MS_DEBUG_TAG(rtp, "Producer BWE feedback: currentMaxBitrate = %u", bitrate);
+
+            this->currentMaxBitrate = bitrate;
+
+            // TODO: Emit event here?
+        }
 
 		// Video SimpleConsumer does not really play the BWE game when. However, let's
 		// be honest and try to be nice.

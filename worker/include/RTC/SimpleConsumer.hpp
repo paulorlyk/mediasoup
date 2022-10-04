@@ -72,6 +72,11 @@ namespace RTC
 		void OnRtpStreamScore(RTC::RtpStream* rtpStream, uint8_t score, uint8_t previousScore) override;
 		void OnRtpStreamRetransmitRtpPacket(RTC::RtpStreamSend* rtpStream, RTC::RtpPacket* packet) override;
 
+        virtual uint32_t GetCurrentMaxBitrate() const override
+        {
+            return this->currentMaxBitrate;
+        }
+
 	private:
 		// Allocated by this.
 		RTC::RtpStreamSend* rtpStream{ nullptr };
@@ -84,6 +89,8 @@ namespace RTC
 		bool managingBitrate{ false };
 		std::unique_ptr<RTC::Codecs::EncodingContext> encodingContext;
 		RTC::ConsumerRtpMapping consumerRtpMapping;
+        bool producerBweFeedback{ false };
+        uint32_t currentMaxBitrate{ 0 };
 	};
 } // namespace RTC
 

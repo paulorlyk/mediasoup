@@ -128,6 +128,7 @@ namespace RTC
 		// Subclasses must also invoke the parent Close().
 		virtual void FillJson(json& jsonObject) const;
 		virtual void FillJsonStats(json& jsonArray);
+        void SetTargetIncomingBitrate(uint32_t bitrate);
 
 		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
 	public:
@@ -188,6 +189,7 @@ namespace RTC
 		void ComputeOutgoingDesiredBitrate(bool forceBitrate = false);
 		void EmitTraceEventProbationType(RTC::RtpPacket* packet) const;
 		void EmitTraceEventBweType(RTC::TransportCongestionControlClient::Bitrates& bitrates) const;
+        void UpdateMaxIncomingBitrate();
 
 		/* Pure virtual methods inherited from RTC::Producer::Listener. */
 	public:
@@ -326,6 +328,7 @@ namespace RTC
 		uint16_t transportWideCcSeq{ 0u };
 		uint32_t initialAvailableOutgoingBitrate{ 600000u };
 		uint32_t maxIncomingBitrate{ 0u };
+		uint32_t targetIncomingBitrate{ 0u };
 		uint32_t maxOutgoingBitrate{ 0u };
 		struct TraceEventTypes traceEventTypes;
 	};
