@@ -618,7 +618,7 @@ namespace RTC
 
 				request->Accept();
 
-                UpdateMaxIncomingBitrate();
+				UpdateMaxIncomingBitrate();
 
 				break;
 			}
@@ -3069,30 +3069,30 @@ namespace RTC
 		}
 	}
 
-    void Transport::SetTargetIncomingBitrate(uint32_t bitrate)
-    {
-        MS_TRACE();
+	void Transport::SetTargetIncomingBitrate(uint32_t bitrate)
+	{
+		MS_TRACE();
 
-        if(this->targetIncomingBitrate != bitrate)
-        {
-            this->targetIncomingBitrate = bitrate;
-            UpdateMaxIncomingBitrate();
-        }
-    }
+		if (this->targetIncomingBitrate != bitrate)
+		{
+			this->targetIncomingBitrate = bitrate;
+			UpdateMaxIncomingBitrate();
+		}
+	}
 
-    inline void Transport::UpdateMaxIncomingBitrate()
-    {
-        MS_TRACE();
+	inline void Transport::UpdateMaxIncomingBitrate()
+	{
+		MS_TRACE();
 
-        if(!this->tccServer)
-            return;
+		if (!this->tccServer)
+			return;
 
-        auto bitrate = this->targetIncomingBitrate;
+		auto bitrate = this->targetIncomingBitrate;
 
-        if(bitrate == 0u || bitrate > this->maxIncomingBitrate)
-            bitrate = this->maxIncomingBitrate;
+		if (bitrate == 0u || bitrate > this->maxIncomingBitrate)
+			bitrate = this->maxIncomingBitrate;
 
-        this->tccServer->SetMaxIncomingBitrate(bitrate);
-    }
+		this->tccServer->SetMaxIncomingBitrate(bitrate);
+	}
 
 } // namespace RTC

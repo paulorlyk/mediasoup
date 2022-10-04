@@ -704,8 +704,8 @@ namespace RTC
 
 		auto& consumers = this->mapProducerConsumers.at(producer);
 
-        uint32_t currentMaxBitrate = 0u;
-        bool updateMaxBitrate = false;
+		uint32_t currentMaxBitrate = 0u;
+		bool updateMaxBitrate      = false;
 
 		if (!consumers.empty())
 		{
@@ -722,16 +722,16 @@ namespace RTC
 				if (!mid.empty())
 					packet->UpdateMid(mid);
 
-                // Only gather BWE feedback from video consumers
-                if(consumer->GetKind() == RTC::Media::Kind::VIDEO)
-                {
-                    const auto consumerCurrentMaxBitrate = consumer->GetCurrentMaxBitrate();
+				// Only gather BWE feedback from video consumers
+				if (consumer->GetKind() == RTC::Media::Kind::VIDEO)
+				{
+					const auto consumerCurrentMaxBitrate = consumer->GetCurrentMaxBitrate();
 
-                    if(currentMaxBitrate == 0u || consumerCurrentMaxBitrate < currentMaxBitrate)
-                        currentMaxBitrate = consumerCurrentMaxBitrate;
+					if (currentMaxBitrate == 0u || consumerCurrentMaxBitrate < currentMaxBitrate)
+						currentMaxBitrate = consumerCurrentMaxBitrate;
 
-                    updateMaxBitrate = true;
-                }
+					updateMaxBitrate = true;
+				}
 
 				consumer->SendRtpPacket(packet, sharedPacket);
 			}
@@ -749,9 +749,9 @@ namespace RTC
 			}
 		}
 
-        // TODO: Probably no need to do this so often
-        if(updateMaxBitrate)
-            transport->SetTargetIncomingBitrate(currentMaxBitrate);
+		// TODO: Probably no need to do this so often
+		if (updateMaxBitrate)
+			transport->SetTargetIncomingBitrate(currentMaxBitrate);
 	}
 
 	inline void Router::OnTransportNeedWorstRemoteFractionLost(

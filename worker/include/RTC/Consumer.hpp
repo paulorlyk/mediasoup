@@ -159,10 +159,10 @@ namespace RTC
 	public:
 		void HandleRequest(Channel::ChannelRequest* request) override;
 
-        virtual uint32_t GetCurrentMaxBitrate() const
-        {
-            return 0u;
-        }
+		virtual uint32_t GetCurrentMaxBitrate() const
+		{
+			return 0u;
+		}
 
 	protected:
 		void EmitTraceEventRtpAndKeyFrameTypes(RTC::RtpPacket* packet, bool isRtx = false) const;
