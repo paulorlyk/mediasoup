@@ -3,10 +3,14 @@
 
 ### Next
 
-* Consumer: use a bitset instead of a set for supported payload types (#919).
+
+### 3.10.8
+
+* `Consumer`: use a bitset instead of a set for supported payload types (#919).
 * RtpPacket: optimize UpdateMid() (#920).
 * Little optimizations and modernization (#916).
 * Fix SIGSEGV at `RTC::WebRtcTransport::OnIceServerTupleRemoved()` (PR #915, credits to @ybybwdwd).
+* `WebRtcServer`: Make `port` optional (if not given, a random available port from the `Worker` port range is used) (PR #908 by @satoren).
 
 
 ### 3.10.7
