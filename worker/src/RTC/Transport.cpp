@@ -3057,7 +3057,7 @@ namespace RTC
 		{
 			if (!this->mapProducers.empty())
 			{
-				uint32_t currentMaxBitrate = 0u;
+				uint32_t currentMaxBitrate = this->maxIncomingBitrate;
 
 				for (auto& kv : this->mapProducers)
 				{
@@ -3073,15 +3073,14 @@ namespace RTC
 							{
 								const auto consumerCurrentMaxBitrate = consumer->GetCurrentMaxBitrate();
 
-								if (consumerCurrentMaxBitrate > 0 && (currentMaxBitrate == 0 || consumerCurrentMaxBitrate < currentMaxBitrate))
+								if (consumerCurrentMaxBitrate > 0u && (currentMaxBitrate == 0u || consumerCurrentMaxBitrate < currentMaxBitrate))
 									currentMaxBitrate = consumerCurrentMaxBitrate;
 							}
 						}
 					}
 				}
 
-				if (currentMaxBitrate > 0u)
-					SetTargetIncomingBitrate(currentMaxBitrate);
+				SetTargetIncomingBitrate(currentMaxBitrate);
 			}
 
 			this->bweFeedbackTimer->Start(RTC::RTCP::MaxVideoIntervalMs / 2);
