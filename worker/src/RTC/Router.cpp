@@ -704,9 +704,6 @@ namespace RTC
 
 		auto& consumers = this->mapProducerConsumers.at(producer);
 
-		uint32_t currentMaxBitrate = 0u;
-		bool updateMaxBitrate      = false;
-
 		if (!consumers.empty())
 		{
 			// Cloned ref-counted packet that RtpStreamSend will store for as long as
@@ -721,17 +718,6 @@ namespace RTC
 
 				if (!mid.empty())
 					packet->UpdateMid(mid);
-
-				// Only gather BWE feedback from video consumers
-				if (consumer->GetKind() == RTC::Media::Kind::VIDEO)
-				{
-					const auto consumerCurrentMaxBitrate = consumer->GetCurrentMaxBitrate();
-
-					if (currentMaxBitrate == 0u || consumerCurrentMaxBitrate < currentMaxBitrate)
-						currentMaxBitrate = consumerCurrentMaxBitrate;
-
-					updateMaxBitrate = true;
-				}
 
 				consumer->SendRtpPacket(packet, sharedPacket);
 			}
@@ -748,10 +734,6 @@ namespace RTC
 				rtpObserver->ReceiveRtpPacket(producer, packet);
 			}
 		}
-
-		// TODO: Probably no need to do this so often
-		if (updateMaxBitrate)
-			transport->SetTargetIncomingBitrate(currentMaxBitrate);
 	}
 
 	inline void Router::OnTransportNeedWorstRemoteFractionLost(

@@ -231,6 +231,10 @@ namespace RTC
 		delete this->rtcpTimer;
 		this->rtcpTimer = nullptr;
 
+		// Delete BWE feedback timer.
+		delete this->bweFeedbackTimer;
+		this->bweFeedbackTimer = nullptr;
+
 		// Delete Transport-CC client.
 		delete this->tccClient;
 		this->tccClient = nullptr;
@@ -816,6 +820,10 @@ namespace RTC
 
 						if (IsConnected())
 							this->tccServer->TransportConnected();
+
+						// Create BWE feedback timer
+						if (!this->bweFeedbackTimer)
+							this->bweFeedbackTimer = new Timer(this);
 					}
 				}
 
@@ -1501,6 +1509,10 @@ namespace RTC
 		// Start the RTCP timer.
 		this->rtcpTimer->Start(static_cast<uint64_t>(RTC::RTCP::MaxVideoIntervalMs / 2));
 
+		// Start BWE feedback timer.
+		if (this->bweFeedbackTimer)
+			this->bweFeedbackTimer->Start(static_cast<uint64_t>(RTC::RTCP::MaxVideoIntervalMs / 2));
+
 		// Tell the TransportCongestionControlClient.
 		if (this->tccClient)
 			this->tccClient->TransportConnected();
@@ -1538,6 +1550,10 @@ namespace RTC
 
 		// Stop the RTCP timer.
 		this->rtcpTimer->Stop();
+
+		// Stop BWE feedback timer.
+		if (this->bweFeedbackTimer)
+			this->bweFeedbackTimer->Stop();
 
 		// Tell the TransportCongestionControlClient.
 		if (this->tccClient)
@@ -3066,6 +3082,39 @@ namespace RTC
 			interval *= static_cast<float>(Utils::Crypto::GetRandomUInt(5, 15)) / 10;
 
 			this->rtcpTimer->Start(interval);
+		}
+		else if (this->bweFeedbackTimer && timer == this->bweFeedbackTimer)
+		{
+			if (!this->mapProducers.empty())
+			{
+				uint32_t currentMaxBitrate = 0u;
+
+				for (auto& kv : this->mapProducers)
+				{
+					auto* producer = kv.second;
+
+					const auto consumers = this->listener->GetProducerConsumers(producer);
+					if (!consumers.empty())
+					{
+						for (auto* consumer : consumers)
+						{
+							// Only gather BWE feedback from video consumers
+							if (consumer->GetKind() == RTC::Media::Kind::VIDEO)
+							{
+								const auto consumerCurrentMaxBitrate = consumer->GetCurrentMaxBitrate();
+
+								if (consumerCurrentMaxBitrate > 0 && (currentMaxBitrate == 0 || consumerCurrentMaxBitrate < currentMaxBitrate))
+									currentMaxBitrate = consumerCurrentMaxBitrate;
+							}
+						}
+					}
+				}
+
+				if (currentMaxBitrate > 0u)
+					SetTargetIncomingBitrate(currentMaxBitrate);
+			}
+
+			this->bweFeedbackTimer->Start(RTC::RTCP::MaxVideoIntervalMs / 2);
 		}
 	}
 

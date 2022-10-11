@@ -15,6 +15,7 @@ export declare type ConsumerOptions = {
      */
     rtpCapabilities: RtpCapabilities;
     consumerRtpMapping?: ConsumerRtpMapping;
+    producerBweFeedback?: boolean;
     /**
      * Whether the Consumer must start in paused mode. Default false.
      *

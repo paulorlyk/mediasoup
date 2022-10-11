@@ -109,6 +109,8 @@ namespace RTC
 			virtual void OnTransportDataConsumerDataProducerClosed(
 			  RTC::Transport* transport, RTC::DataConsumer* dataConsumer)         = 0;
 			virtual void OnTransportListenServerClosed(RTC::Transport* transport) = 0;
+			virtual const absl::flat_hash_set<RTC::Consumer*>& GetProducerConsumers(
+			  RTC::Producer* producer) const = 0;
 		};
 
 	private:
@@ -307,6 +309,7 @@ namespace RTC
 		absl::flat_hash_map<uint32_t, RTC::Consumer*> mapSsrcConsumer;
 		absl::flat_hash_map<uint32_t, RTC::Consumer*> mapRtxSsrcConsumer;
 		Timer* rtcpTimer{ nullptr };
+		Timer* bweFeedbackTimer{ nullptr };
 		RTC::TransportCongestionControlClient* tccClient{ nullptr };
 		RTC::TransportCongestionControlServer* tccServer{ nullptr };
 #ifdef ENABLE_RTC_SENDER_BANDWIDTH_ESTIMATOR

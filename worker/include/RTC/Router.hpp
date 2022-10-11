@@ -101,6 +101,11 @@ namespace RTC
 		void OnTransportDataConsumerDataProducerClosed(
 		  RTC::Transport* transport, RTC::DataConsumer* dataConsumer) override;
 		void OnTransportListenServerClosed(RTC::Transport* transport) override;
+		virtual const absl::flat_hash_set<RTC::Consumer*>& GetProducerConsumers(
+		  RTC::Producer* producer) const override
+		{
+			return this->mapProducerConsumers.at(producer);
+		}
 
 		/* Pure virtual methods inherited from RTC::RtpObserver::Listener. */
 	public:
