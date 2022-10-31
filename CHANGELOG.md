@@ -1,6 +1,19 @@
 # Changelog
 
 
+### NEXT
+
+* Transport: Remove duplicate call to method (PR #931).
+* RTCP: Adjust maximum compound packet size (PR #934).
+* Fix `bufferedAmount` type to be a number again (PR #936).
+
+
+### 3.10.12
+
+* Fix worker crash due to `std::out_of_range` exception (PR #933).
+* Update NPM deps.
+
+
 ### 3.10.11
 
 * RTCP: Fix trailing space needed by srtp_protect_rtcp() (PR #929).
