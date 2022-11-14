@@ -698,7 +698,7 @@ namespace RTC
 	}
 
 	inline void Router::OnTransportProducerRtpPacketReceived(
-	  RTC::Transport* transport, RTC::Producer* producer, RTC::RtpPacket* packet)
+	  RTC::Transport* /*transport*/, RTC::Producer* producer, RTC::RtpPacket* packet)
 	{
 		MS_TRACE();
 
