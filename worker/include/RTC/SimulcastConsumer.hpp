@@ -6,6 +6,7 @@
 #include "RTC/ConsumerRtpMapping.hpp"
 #include "RTC/RtpStreamSend.hpp"
 #include "RTC/SeqManager.hpp"
+#include "RTC/Shared.hpp"
 
 namespace RTC
 {
@@ -13,6 +14,7 @@ namespace RTC
 	{
 	public:
 		SimulcastConsumer(
+		  RTC::Shared* shared,
 		  const std::string& id,
 		  const std::string& producerId,
 		  RTC::Consumer::Listener* listener,

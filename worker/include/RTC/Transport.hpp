@@ -21,6 +21,7 @@
 #include "RTC/RtpPacket.hpp"
 #include "RTC/SctpAssociation.hpp"
 #include "RTC/SctpListener.hpp"
+#include "RTC/Shared.hpp"
 #ifdef ENABLE_RTC_SENDER_BANDWIDTH_ESTIMATOR
 #include "RTC/SenderBandwidthEstimator.hpp"
 #endif
@@ -121,7 +122,7 @@ namespace RTC
 		};
 
 	public:
-		Transport(const std::string& id, Listener* listener, json& data);
+		Transport(RTC::Shared* shared, const std::string& id, Listener* listener, json& data);
 		virtual ~Transport();
 
 	public:
@@ -294,6 +295,7 @@ namespace RTC
 		const std::string id;
 
 	protected:
+		RTC::Shared* shared{ nullptr };
 		size_t maxMessageSize{ 262144u };
 		// Allocated by this.
 		RTC::SctpAssociation* sctpAssociation{ nullptr };
