@@ -17,8 +17,9 @@ namespace RTC
 	  const std::string& producerId,
 	  RTC::Consumer::Listener* listener,
 	  json& data)
-	  : RTC::Consumer::Consumer(shared, id, producerId, listener, data, RTC::RtpParameters::Type::SIMPLE),
-        consumerRtpMapping(data)
+	  : RTC::Consumer::Consumer(
+	      shared, id, producerId, listener, data, RTC::RtpParameters::Type::SIMPLE),
+	    consumerRtpMapping(data)
 	{
 		MS_TRACE();
 
