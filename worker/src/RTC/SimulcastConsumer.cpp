@@ -313,7 +313,7 @@ namespace RTC
 
 		MS_ASSERT(it != this->mapMappedSsrcSpatialLayer.end(), "unknown mappedSsrc");
 
-		int16_t spatialLayer = it->second;
+		const int16_t spatialLayer = it->second;
 
 		this->producerRtpStreams[spatialLayer] = rtpStream;
 	}
@@ -326,7 +326,7 @@ namespace RTC
 
 		MS_ASSERT(it != this->mapMappedSsrcSpatialLayer.end(), "unknown mappedSsrc");
 
-		int16_t spatialLayer = it->second;
+		const int16_t spatialLayer = it->second;
 
 		this->producerRtpStreams[spatialLayer] = rtpStream;
 
@@ -634,6 +634,11 @@ namespace RTC
 		auto nowMs = DepLibUV::GetTimeMs();
 		uint32_t desiredBitrate{ 0u };
 
+		// Let's iterate all streams of the Producer (from highest to lowest) and
+		// obtain their bitrate. Choose the highest one.
+		// NOTE: When the Producer enables a higher stream, initially the bitrate of
+		// it could be less than the bitrate of a lower stream. That's why we
+		// iterate all streams here anyway.
 		for (auto sIdx{ static_cast<int16_t>(this->producerRtpStreams.size() - 1) }; sIdx >= 0; --sIdx)
 		{
 			auto* producerRtpStream = this->producerRtpStreams.at(sIdx);
@@ -641,10 +646,10 @@ namespace RTC
 			if (!producerRtpStream)
 				continue;
 
-			desiredBitrate = producerRtpStream->GetBitrate(nowMs);
+			auto streamBitrate = producerRtpStream->GetBitrate(nowMs);
 
-			if (desiredBitrate)
-				break;
+			if (streamBitrate > desiredBitrate)
+				desiredBitrate = streamBitrate;
 		}
 
 		// If consumer.rtpParameters.encodings[0].maxBitrate was given and it's
@@ -708,7 +713,7 @@ namespace RTC
 			return;
 
 		// Whether this is the first packet after re-sync.
-		bool isSyncPacket = this->syncRequired;
+		const bool isSyncPacket = this->syncRequired;
 
 		// Sync sequence number and timestamp if required.
 		if (isSyncPacket && (this->spatialLayerToSync == -1 || this->spatialLayerToSync == spatialLayer))
@@ -749,8 +754,8 @@ namespace RTC
 				else
 					diffMs = -1 * (ntpMs1 - ntpMs2);
 
-				int64_t diffTs  = diffMs * this->rtpStream->GetClockRate() / 1000;
-				uint32_t newTs2 = ts2 - diffTs;
+				const int64_t diffTs  = diffMs * this->rtpStream->GetClockRate() / 1000;
+				const uint32_t newTs2 = ts2 - diffTs;
 
 				// Apply offset. This is the difference that later must be removed from the
 				// sending RTP packet.
@@ -777,8 +782,7 @@ namespace RTC
 				// Apply an expected offset for a new frame in a 30fps stream.
 				static const uint8_t MsOffset{ 33u }; // (1 / 30 * 1000).
 
-				int64_t maxTsExtraOffset = MaxExtraOffsetMs * this->rtpStream->GetClockRate() / 1000;
-
+				const int64_t maxTsExtraOffset = MaxExtraOffsetMs * this->rtpStream->GetClockRate() / 1000;
 				uint32_t tsExtraOffset = this->rtpStream->GetMaxPacketTs() - packet->GetTimestamp() +
 				                         tsOffset + MsOffset * this->rtpStream->GetClockRate() / 1000;
 
@@ -809,6 +813,10 @@ namespace RTC
 
 					this->keyFrameForTsOffsetRequested = true;
 
+					// Reset flags since we are discarding this key frame.
+					this->syncRequired       = false;
+					this->spatialLayerToSync = -1;
+
 					return;
 				}
 
@@ -828,10 +836,11 @@ namespace RTC
 			this->tsOffset = tsOffset;
 
 			// Sync our RTP stream's sequence number.
-			// If previous frame has not been sent completely when we switch layer, we can tell
-			// libwebrtc that previous frame is incomplete by skipping one RTP sequence number.
-			// 'packet->GetSequenceNumber() -2' may increase SeqManager::base and increase the
-			// output sequence number.
+			// If previous frame has not been sent completely when we switch layer,
+			// we can tell libwebrtc that previous frame is incomplete by skipping
+			// one RTP sequence number.
+			// 'packet->GetSequenceNumber() -2' may increase SeqManager::base and
+			// increase the output sequence number.
 			// https://github.com/versatica/mediasoup/issues/408
 			this->rtpSeqManager.Sync(packet->GetSequenceNumber() - (this->lastSentPacketHasMarker ? 1 : 2));
 
@@ -901,7 +910,7 @@ namespace RTC
 
 		// Update RTP seq number and timestamp based on NTP offset.
 		uint16_t seq;
-		uint32_t timestamp = packet->GetTimestamp() - this->tsOffset;
+		const uint32_t timestamp = packet->GetTimestamp() - this->tsOffset;
 
 		this->rtpSeqManager.Input(packet->GetSequenceNumber(), seq);
 
