@@ -280,7 +280,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	close(): void
 	{
 		if (this.#closed)
+		{
 			return;
+		}
 
 		logger.debug('close()');
 
@@ -344,7 +346,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	routerClosed(): void
 	{
 		if (this.#closed)
+		{
 			return;
+		}
 
 		logger.debug('routerClosed()');
 
@@ -403,7 +407,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	listenServerClosed(): void
 	{
 		if (this.#closed)
+		{
 			return;
+		}
 
 		logger.debug('listenServerClosed()');
 
@@ -534,11 +540,17 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		logger.debug('produce()');
 
 		if (id && this.#producers.has(id))
+		{
 			throw new TypeError(`a Producer with same id "${id}" already exists`);
+		}
 		else if (![ 'audio', 'video' ].includes(kind))
+		{
 			throw new TypeError(`invalid kind "${kind}"`);
+		}
 		else if (appData && typeof appData !== 'object')
+		{
 			throw new TypeError('if given, appData must be an object');
+		}
 
 		// This may throw.
 		ortc.validateRtpParameters(rtpParameters);
@@ -650,6 +662,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			mid,
 			preferredLayers,
 			ignoreDtx = false,
+			enableRtx,
 			pipe = false,
 			appData
 		}: ConsumerOptions
@@ -658,11 +671,17 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		logger.debug('consume()');
 
 		if (!producerId || typeof producerId !== 'string')
+		{
 			throw new TypeError('missing producerId');
+		}
 		else if (appData && typeof appData !== 'object')
+		{
 			throw new TypeError('if given, appData must be an object');
+		}
 		else if (mid && (typeof mid !== 'string' || mid.length === 0))
+		{
 			throw new TypeError('if given, mid must be non empty string');
+		}
 
 		// This may throw.
 		ortc.validateRtpCapabilities(rtpCapabilities!);
@@ -670,11 +689,25 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		const producer = this.getProducerById(producerId);
 
 		if (!producer)
+		{
 			throw Error(`Producer with id "${producerId}" not found`);
+		}
+
+		// If enableRtx is not given, set it to true if video and false if audio.
+		if (enableRtx === undefined)
+		{
+			enableRtx = producer.kind === 'video';
+		}
 
 		// This may throw.
-		const rtpParameters : RtpParameters = utils.clone(ortc.getConsumerRtpParameters(
-			producer.consumableRtpParameters, rtpCapabilities!, pipe));
+		const rtpParameters = utils.clone(ortc.getConsumerRtpParameters(
+			{
+				consumableRtpParameters : producer.consumableRtpParameters,
+				remoteRtpCapabilities   : rtpCapabilities!,
+				pipe,
+				enableRtx
+			}
+		));
 
 		// Set MID.
 		if (!pipe)
@@ -723,7 +756,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 				.find((c) => c.payloadType === codec.payloadType);
 
 			if (mapping)
+			{
 				codec.payloadType = mapping.mappedPayloadType;
+			}
 
 			if (codec?.parameters?.apt)
 			{
@@ -731,7 +766,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 					.find((c) => c.payloadType === codec.parameters.apt);
 
 				if (aptMapping)
+				{
 					codec.parameters.apt = aptMapping.mappedPayloadType;
+				}
 			}
 		}
 
@@ -744,7 +781,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 					.find((c) => c.payloadType === encoding.codecPayloadType);
 
 				if (mapping)
+				{
 					encoding.codecPayloadType = mapping.mappedPayloadType;
+				}
 			}
 		}
 
@@ -755,7 +794,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 				.find((he) => he.id === headerExtension.id);
 
 			if (mapping)
+			{
 				headerExtension.id = mapping.mappedId;
+			}
 		}
 
 		const data =
@@ -809,9 +850,13 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		logger.debug('produceData()');
 
 		if (id && this.dataProducers.has(id))
+		{
 			throw new TypeError(`a DataProducer with same id "${id}" already exists`);
+		}
 		else if (appData && typeof appData !== 'object')
+		{
 			throw new TypeError('if given, appData must be an object');
+		}
 
 		let type: DataProducerType;
 
@@ -891,14 +936,20 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		logger.debug('consumeData()');
 
 		if (!dataProducerId || typeof dataProducerId !== 'string')
+		{
 			throw new TypeError('missing dataProducerId');
+		}
 		else if (appData && typeof appData !== 'object')
+		{
 			throw new TypeError('if given, appData must be an object');
+		}
 
 		const dataProducer = this.getDataProducerById(dataProducerId);
 
 		if (!dataProducer)
+		{
 			throw Error(`DataProducer with id "${dataProducerId}" not found`);
+		}
 
 		let type: DataConsumerType;
 		let sctpStreamParameters: SctpStreamParameters | undefined;
@@ -914,13 +965,19 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 
 			// Override if given.
 			if (ordered !== undefined)
+			{
 				sctpStreamParameters.ordered = ordered;
+			}
 
 			if (maxPacketLifeTime !== undefined)
+			{
 				sctpStreamParameters.maxPacketLifeTime = maxPacketLifeTime;
+			}
 
 			if (maxRetransmits !== undefined)
+			{
 				sctpStreamParameters.maxRetransmits = maxRetransmits;
+			}
 
 			// This may throw.
 			sctpStreamId = this.getNextSctpStreamId();
@@ -978,14 +1035,18 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			this.dataConsumers.delete(dataConsumer.id);
 
 			if (this.#sctpStreamIds)
+			{
 				this.#sctpStreamIds[sctpStreamId] = 0;
+			}
 		});
 		dataConsumer.on('@dataproducerclose', () =>
 		{
 			this.dataConsumers.delete(dataConsumer.id);
 
 			if (this.#sctpStreamIds)
+			{
 				this.#sctpStreamIds[sctpStreamId] = 0;
+			}
 		});
 
 		// Emit observer event.
@@ -1020,7 +1081,9 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		const numStreams = this.#data.sctpParameters.MIS;
 
 		if (!this.#sctpStreamIds)
+		{
 			this.#sctpStreamIds = Buffer.alloc(numStreams, 0);
+		}
 
 		let sctpStreamId;
 

@@ -55,6 +55,16 @@ export type ConsumerOptions =
 	preferredLayers?: ConsumerLayers;
 
 	/**
+	 * Whether this Consumer should enable RTP retransmissions, storing sent RTP
+	 * and processing the incoming RTCP NACK from the remote Consumer. If not set
+	 * it's true by default for video codecs and false for audio codecs. If set
+	 * to true, NACK will be enabled if both endpoints (mediasoup and the remote
+	 * Consumer) support NACK for this codec. When it comes to audio codecs, just
+	 * OPUS supports NACK.
+	 */
+	enableRtx?: boolean;
+
+	/**
 	 * Whether this Consumer should ignore DTX packets (only valid for Opus codec).
 	 * If set, DTX packets are not forwarded to the remote Consumer.
 	 */
@@ -440,7 +450,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 	close(): void
 	{
 		if (this.#closed)
+		{
 			return;
+		}
 
 		logger.debug('close()');
 
@@ -469,7 +481,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 	transportClosed(): void
 	{
 		if (this.#closed)
+		{
 			return;
+		}
 
 		logger.debug('transportClosed()');
 
@@ -520,7 +534,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 
 		// Emit observer event.
 		if (!wasPaused)
+		{
 			this.#observer.safeEmit('pause');
+		}
 	}
 
 	/**
@@ -538,7 +554,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 
 		// Emit observer event.
 		if (wasPaused && !this.#producerPaused)
+		{
 			this.#observer.safeEmit('resume');
+		}
 	}
 
 	/**
@@ -623,7 +641,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 				case 'producerclose':
 				{
 					if (this.#closed)
+					{
 						break;
+					}
 
 					this.#closed = true;
 
@@ -643,7 +663,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 				case 'producerpause':
 				{
 					if (this.#producerPaused)
+					{
 						break;
+					}
 
 					const wasPaused = this.#paused || this.#producerPaused;
 
@@ -653,7 +675,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 
 					// Emit observer event.
 					if (!wasPaused)
+					{
 						this.#observer.safeEmit('pause');
+					}
 
 					break;
 				}
@@ -661,7 +685,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 				case 'producerresume':
 				{
 					if (!this.#producerPaused)
+					{
 						break;
+					}
 
 					const wasPaused = this.#paused || this.#producerPaused;
 
@@ -671,7 +697,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 
 					// Emit observer event.
 					if (wasPaused && !this.#paused)
+					{
 						this.#observer.safeEmit('resume');
+					}
 
 					break;
 				}
@@ -732,7 +760,9 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 					case 'rtp':
 					{
 						if (this.#closed)
+						{
 							break;
+						}
 
 						const packet = payload;
 

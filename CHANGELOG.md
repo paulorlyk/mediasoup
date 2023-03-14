@@ -1,7 +1,27 @@
 # Changelog
 
 
-### Next
+### 3.11.13
+
+* `AudioLevelObserver`: Use multimap rather than map to avoid conflict if various Producers generate same audio level ([PR #1021](https://github.com/versatica/mediasoup/pull/1021), issue reported by @buptlsp).
+* Update NPM deps.
+
+
+### 3.11.12
+
+* Fix jitter calculation ([PR #1019](https://github.com/versatica/mediasoup/pull/1019), credits to @alexciarlillo and @snnz).
+* Update NPM deps.
+
+
+### 3.11.11
+
+* Add support for RTCP NACK in OPUS ([PR #1015](https://github.com/versatica/mediasoup/pull/1015)).
+* Update NPM deps.
+
+
+### 3.11.10
+
+* Download and use MSYS/make locally for Windows postinstall ([PR #792](https://github.com/versatica/mediasoup/pull/792) by @snnz).
 
 
 ### 3.11.9
