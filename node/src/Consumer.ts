@@ -9,8 +9,9 @@ import {
 	RtpCapabilities,
 	RtpParameters
 } from './RtpParameters';
+import { AppData } from './types';
 
-export type ConsumerOptions =
+export type ConsumerOptions<ConsumerAppData extends AppData = AppData> =
 {
 	/**
 	 * The id of the Producer to consume.
@@ -79,7 +80,7 @@ export type ConsumerOptions =
 	/**
 	 * Custom application data.
 	 */
-	appData?: Record<string, unknown>;
+	appData?: ConsumerAppData;
 };
 
 /**
@@ -230,7 +231,8 @@ type ConsumerData =
 
 const logger = new Logger('Consumer');
 
-export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
+export class Consumer<ConsumerAppData extends AppData = AppData>
+	extends EnhancedEventEmitter<ConsumerEvents>
 {
 	// Internal data.
 	readonly #internal: ConsumerInternal;
@@ -248,7 +250,7 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 	#closed = false;
 
 	// Custom app data.
-	readonly #appData: Record<string, unknown>;
+	#appData: ConsumerAppData;
 
 	// Paused flag.
 	#paused = false;
@@ -291,7 +293,7 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 			data: ConsumerData;
 			channel: Channel;
 			payloadChannel: PayloadChannel;
-			appData?: Record<string, unknown>;
+			appData?: ConsumerAppData;
 			paused: boolean;
 			producerPaused: boolean;
 			score?: ConsumerScore;
@@ -306,7 +308,7 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 		this.#data = data;
 		this.#channel = channel;
 		this.#payloadChannel = payloadChannel;
-		this.#appData = appData || {};
+		this.#appData = appData || {} as ConsumerAppData;
 		this.#paused = paused;
 		this.#producerPaused = producerPaused;
 		this.#score = score;
@@ -414,17 +416,17 @@ export class Consumer extends EnhancedEventEmitter<ConsumerEvents>
 	/**
 	 * App custom data.
 	 */
-	get appData(): Record<string, unknown>
+	get appData(): ConsumerAppData
 	{
 		return this.#appData;
 	}
 
 	/**
-	 * Invalid setter.
+	 * App custom data setter.
 	 */
-	set appData(appData: Record<string, unknown>) // eslint-disable-line no-unused-vars
+	set appData(appData: ConsumerAppData)
 	{
-		throw new Error('cannot override appData object');
+		this.#appData = appData;
 	}
 
 	/**

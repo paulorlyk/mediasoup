@@ -24,6 +24,7 @@ import {
 } from './DataConsumer';
 import { RtpCapabilities, RtpParameters } from './RtpParameters';
 import { SctpStreamParameters } from './SctpParameters';
+import { AppData } from './types';
 
 export type TransportListenIp =
 {
@@ -86,8 +87,8 @@ export type TransportTraceEventData =
 
 export type SctpState = 'new' | 'connecting' | 'connected' | 'failed' | 'closed';
 
-export type TransportEvents = 
-{ 
+export type TransportEvents =
+{
 	routerclose: [];
 	listenserverclose: [];
 	trace: [TransportTraceEventData];
@@ -110,13 +111,13 @@ export type TransportObserverEvents =
 	trace: [TransportTraceEventData];
 };
 
-export type TransportConstructorOptions =
+export type TransportConstructorOptions<TransportAppData> =
 {
 	internal: TransportInternal;
 	data: TransportData;
 	channel: Channel;
 	payloadChannel: PayloadChannel;
-	appData?: Record<string, unknown>;
+	appData?: TransportAppData;
 	getRouterRtpCapabilities: () => RtpCapabilities;
 	getProducerById: (producerId: string) => Producer | undefined;
 	getDataProducerById: (dataProducerId: string) => DataProducer | undefined;
@@ -135,8 +136,10 @@ type TransportData =
 
 const logger = new Logger('Transport');
 
-export class Transport<Events extends TransportEvents = TransportEvents,
-	ObserverEvents extends TransportObserverEvents = TransportObserverEvents>
+export class Transport
+	<Events extends TransportEvents = TransportEvents,
+	ObserverEvents extends TransportObserverEvents = TransportObserverEvents,
+	TransportAppData extends AppData = AppData>
 	extends EnhancedEventEmitter<Events>
 {
 	// Internal data.
@@ -155,7 +158,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	#closed = false;
 
 	// Custom app data.
-	readonly #appData: Record<string, unknown>;
+	#appData: TransportAppData;
 
 	// Method to retrieve Router RTP capabilities.
 	readonly #getRouterRtpCapabilities: () => RtpCapabilities;
@@ -208,7 +211,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			getRouterRtpCapabilities,
 			getProducerById,
 			getDataProducerById
-		}: TransportConstructorOptions
+		}: TransportConstructorOptions<TransportAppData>
 	)
 	{
 		super();
@@ -219,7 +222,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		this.#data = data;
 		this.channel = channel;
 		this.payloadChannel = payloadChannel;
-		this.#appData = appData || {};
+		this.#appData = appData || {} as TransportAppData;
 		this.#getRouterRtpCapabilities = getRouterRtpCapabilities;
 		this.getProducerById = getProducerById;
 		this.getDataProducerById = getDataProducerById;
@@ -244,17 +247,17 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	/**
 	 * App custom data.
 	 */
-	get appData(): Record<string, unknown>
+	get appData(): TransportAppData
 	{
 		return this.#appData;
 	}
 
 	/**
-	 * Invalid setter.
+	 * App custom data setter.
 	 */
-	set appData(appData: Record<string, unknown>) // eslint-disable-line no-unused-vars
+	set appData(appData: TransportAppData)
 	{
-		throw new Error('cannot override appData object');
+		this.#appData = appData;
 	}
 
 	/**
@@ -524,9 +527,22 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	}
 
 	/**
+	 * Set minimum outgoing bitrate for sending media.
+	 */
+	async setMinOutgoingBitrate(bitrate: number): Promise<void>
+	{
+		logger.debug('setMinOutgoingBitrate() [bitrate:%s]', bitrate);
+
+		const reqData = { bitrate };
+
+		await this.channel.request(
+			'transport.setMinOutgoingBitrate', this.internal.transportId, reqData);
+	}
+
+	/**
 	 * Create a Producer.
 	 */
-	async produce(
+	async produce<ProducerAppData extends AppData = AppData>(
 		{
 			id = undefined,
 			kind,
@@ -534,8 +550,8 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			paused = false,
 			keyFrameRequestDelay,
 			appData
-		}: ProducerOptions
-	): Promise<Producer>
+		}: ProducerOptions<ProducerAppData>
+	): Promise<Producer<ProducerAppData>>
 	{
 		logger.debug('produce()');
 
@@ -618,7 +634,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			consumableRtpParameters
 		};
 
-		const producer = new Producer(
+		const producer = new Producer<ProducerAppData>(
 			{
 				internal :
 				{
@@ -652,7 +668,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	 *
 	 * @virtual
 	 */
-	async consume(
+	async consume<ConsumerAppData extends AppData = AppData>(
 		{
 			producerId,
 			rtpCapabilities,
@@ -665,8 +681,8 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			enableRtx,
 			pipe = false,
 			appData
-		}: ConsumerOptions
-	): Promise<Consumer>
+		}: ConsumerOptions<ConsumerAppData>
+	): Promise<Consumer<ConsumerAppData>>
 	{
 		logger.debug('consume()');
 
@@ -807,7 +823,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 			type : pipe ? 'pipe' : producer.type as ConsumerType
 		};
 
-		const consumer = new Consumer(
+		const consumer = new Consumer<ConsumerAppData>(
 			{
 				internal :
 				{
@@ -837,15 +853,15 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	/**
 	 * Create a DataProducer.
 	 */
-	async produceData(
+	async produceData<DataProducerAppData extends AppData = AppData>(
 		{
 			id = undefined,
 			sctpStreamParameters,
 			label = '',
 			protocol = '',
 			appData
-		}: DataProducerOptions = {}
-	): Promise<DataProducer>
+		}: DataProducerOptions<DataProducerAppData> = {}
+	): Promise<DataProducer<DataProducerAppData>>
 	{
 		logger.debug('produceData()');
 
@@ -892,7 +908,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		const data =
 			await this.channel.request('transport.produceData', this.internal.transportId, reqData);
 
-		const dataProducer = new DataProducer(
+		const dataProducer = new DataProducer<DataProducerAppData>(
 			{
 				internal :
 				{
@@ -923,15 +939,15 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 	/**
 	 * Create a DataConsumer.
 	 */
-	async consumeData(
+	async consumeData<ConsumerAppData extends AppData = AppData>(
 		{
 			dataProducerId,
 			ordered,
 			maxPacketLifeTime,
 			maxRetransmits,
 			appData
-		}: DataConsumerOptions
-	): Promise<DataConsumer>
+		}: DataConsumerOptions<ConsumerAppData>
+	): Promise<DataConsumer<ConsumerAppData>>
 	{
 		logger.debug('consumeData()');
 
@@ -1016,7 +1032,7 @@ export class Transport<Events extends TransportEvents = TransportEvents,
 		const data =
 			await this.channel.request('transport.consumeData', this.internal.transportId, reqData);
 
-		const dataConsumer = new DataConsumer(
+		const dataConsumer = new DataConsumer<ConsumerAppData>(
 			{
 				internal :
 				{

@@ -11,7 +11,7 @@ namespace RTC
 {
 	/* Static. */
 
-	// Limit retransmission buffer max size to 2500 items.
+	// Limit max number of items in the retransmission buffer.
 	static constexpr size_t RetransmissionBufferMaxItems{ 2500u };
 	// 17: 16 bit mask + the initial sequence number.
 	static constexpr size_t MaxRequestedPackets{ 17u };
@@ -52,7 +52,7 @@ namespace RTC
 					break;
 				}
 
-				case RTC::RtpCodecMimeType::Type::UNSET:
+				default:
 				{
 					MS_ABORT("codec mimeType not set");
 				}
@@ -626,5 +626,16 @@ namespace RTC
 #endif
 
 		RtpStream::UpdateScore(score);
+	}
+
+	void RtpStreamSend::UserOnSequenceNumberReset()
+	{
+		MS_TRACE();
+
+		// Clear retransmission buffer.
+		if (this->retransmissionBuffer)
+		{
+			this->retransmissionBuffer->Clear();
+		}
 	}
 } // namespace RTC

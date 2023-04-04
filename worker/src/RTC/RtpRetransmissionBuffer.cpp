@@ -81,11 +81,65 @@ namespace RTC
 			return;
 		}
 
-		// Clear too old packets in the buffer.
-		ClearTooOld();
+		auto* oldestItem = GetOldest();
+		auto* newestItem = GetNewest();
 
-		const auto* oldestItem = GetOldest();
-		const auto* newestItem = GetNewest();
+		// Special case: Received packet has lower seq than newest packet in the
+		// buffer, however its timestamp is higher. If so, clear the whole buffer.
+		if (
+		  RTC::SeqManager<uint16_t>::IsSeqLowerThan(seq, newestItem->sequenceNumber) &&
+		  RTC::SeqManager<uint32_t>::IsSeqHigherThan(timestamp, newestItem->timestamp))
+		{
+			MS_WARN_TAG(
+			  rtp,
+			  "packet has lower seq but higher timestamp than newest packet in the buffer, emptying the buffer [ssrc:%" PRIu32
+			  ", seq:%" PRIu16 ", timestamp:%" PRIu32 "]",
+			  ssrc,
+			  seq,
+			  timestamp);
+
+			Clear();
+
+			auto* item = new Item();
+
+			this->buffer.push_back(FillItem(item, packet, sharedPacket));
+
+			return;
+		}
+
+		// Clear too old packets in the buffer.
+		// NOTE: Here we must consider the case in which, due for example to huge
+		// packet loss, received packet has higher timestamp but "older" seq number
+		// than the newest packet in the buffer and, if so, use it to clear too old
+		// packets rather than the newest packet in the buffer.
+		auto newestTimestamp =
+		  RTC::SeqManager<uint32_t>::IsSeqHigherThan(timestamp, newestItem->timestamp)
+		    ? timestamp
+		    : newestItem->timestamp;
+
+		// ClearTooOldByTimestamp() returns true if at least one packet has been
+		// removed from the front.
+		if (ClearTooOldByTimestamp(newestTimestamp))
+		{
+			// Buffer content has been modified so we must check it again.
+			if (this->buffer.empty())
+			{
+				MS_WARN_TAG(
+				  rtp,
+				  "buffer empty after clearing too old packets [seq:%" PRIu16 ", timestamp:%" PRIu32 "]",
+				  seq,
+				  timestamp);
+
+				auto* item = new Item();
+
+				this->buffer.push_back(FillItem(item, packet, sharedPacket));
+
+				return;
+			}
+
+			oldestItem = GetOldest();
+			newestItem = GetNewest();
+		}
 
 		MS_ASSERT(oldestItem != nullptr, "oldest item doesn't exist");
 		MS_ASSERT(newestItem != nullptr, "newest item doesn't exist");
@@ -102,7 +156,7 @@ namespace RTC
 			{
 				MS_WARN_TAG(
 				  rtp,
-				  "packet has higher seq but less timestamp than newest packet in the buffer, discarding it [ssrc:%" PRIu32
+				  "packet has higher seq but lower timestamp than newest packet in the buffer, discarding it [ssrc:%" PRIu32
 				  ", seq:%" PRIu16 ", timestamp:%" PRIu32 "]",
 				  ssrc,
 				  seq,
@@ -174,10 +228,12 @@ namespace RTC
 			  timestamp);
 
 			// Ensure that packet is not too old to be stored.
-			if (IsTooOld(timestamp, newestItem->timestamp))
+			if (IsTooOldTimestamp(timestamp, newestItem->timestamp))
 			{
 				MS_WARN_DEV(
-				  "packet too old, discarding it [seq:%" PRIu16 ", timestamp:%" PRIu32 "]", seq, timestamp);
+				  "packet's timestamp too old, discarding it [seq:%" PRIu16 ", timestamp:%" PRIu32 "]",
+				  seq,
+				  timestamp);
 
 				return;
 			}
@@ -188,7 +244,7 @@ namespace RTC
 			{
 				MS_WARN_TAG(
 				  rtp,
-				  "packet has less seq but higher timestamp than oldest packet in the buffer, discarding it [ssrc:%" PRIu32
+				  "packet has lower seq but higher timestamp than oldest packet in the buffer, discarding it [ssrc:%" PRIu32
 				  ", seq:%" PRIu16 ", timestamp:%" PRIu32 "]",
 				  ssrc,
 				  seq,
@@ -275,7 +331,7 @@ namespace RTC
 				{
 					MS_WARN_TAG(
 					  rtp,
-					  "packet timestamp is less than timestamp of immediate older packet in the buffer, discarding it [ssrc:%" PRIu32
+					  "packet timestamp is lower than timestamp of immediate older packet in the buffer, discarding it [ssrc:%" PRIu32
 					  ", seq:%" PRIu16 ", timestamp:%" PRIu32 "]",
 					  ssrc,
 					  seq,
@@ -456,26 +512,22 @@ namespace RTC
 		}
 	}
 
-	void RtpRetransmissionBuffer::ClearTooOld()
+	bool RtpRetransmissionBuffer::ClearTooOldByTimestamp(uint32_t newestTimestamp)
 	{
 		MS_TRACE();
 
-		const auto* newestItem = GetNewest();
-
-		if (!newestItem)
-		{
-			return;
-		}
-
 		RtpRetransmissionBuffer::Item* oldestItem{ nullptr };
+		bool itemsRemoved{ false };
 
 		// Go through all buffer items starting with the first and free all items
 		// that contain too old packets.
 		while ((oldestItem = GetOldest()))
 		{
-			if (IsTooOld(oldestItem->timestamp, newestItem->timestamp))
+			if (IsTooOldTimestamp(oldestItem->timestamp, newestTimestamp))
 			{
 				RemoveOldest();
+
+				itemsRemoved = true;
 			}
 			// If current oldest stored packet is not too old, exit the loop since we
 			// know that packets stored after it are guaranteed to be newer.
@@ -484,9 +536,11 @@ namespace RTC
 				break;
 			}
 		}
+
+		return itemsRemoved;
 	}
 
-	bool RtpRetransmissionBuffer::IsTooOld(uint32_t timestamp, uint32_t newestTimestamp) const
+	bool RtpRetransmissionBuffer::IsTooOldTimestamp(uint32_t timestamp, uint32_t newestTimestamp) const
 	{
 		MS_TRACE();
 

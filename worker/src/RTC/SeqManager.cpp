@@ -63,12 +63,6 @@ namespace RTC
 	}
 
 	template<typename T, uint8_t N>
-	void SeqManager<T, N>::Offset(T offset)
-	{
-		this->base = (this->base + offset) & MaxValue;
-	}
-
-	template<typename T, uint8_t N>
 	bool SeqManager<T, N>::Input(const T input, T& output)
 	{
 		auto base = this->base;
@@ -113,15 +107,29 @@ namespace RTC
 
 		output = (input + base) & MaxValue;
 
-		// New input is higher than the maximum seen. But less than acceptable units higher.
-		// Keep it as the maximum seen. See Drop().
-		if (IsSeqHigherThan(input, this->maxInput))
-			this->maxInput = input;
+		if (!this->started)
+		{
+			this->started = true;
 
-		// New output is higher than the maximum seen. But less than acceptable units higher.
-		// Keep it as the maximum seen. See Sync().
-		if (IsSeqHigherThan(output, this->maxOutput))
+			this->maxInput  = input;
 			this->maxOutput = output;
+		}
+		else
+		{
+			// New input is higher than the maximum seen. But less than acceptable units higher.
+			// Keep it as the maximum seen. See Drop().
+			if (IsSeqHigherThan(input, this->maxInput))
+			{
+				this->maxInput = input;
+			}
+
+			// New output is higher than the maximum seen. But less than acceptable units higher.
+			// Keep it as the maximum seen. See Sync().
+			if (IsSeqHigherThan(output, this->maxOutput))
+			{
+				this->maxOutput = output;
+			}
+		}
 
 		ClearDropped();
 
@@ -172,7 +180,19 @@ namespace RTC
 		// There are many values in the range.
 		else
 		{
-			this->dropped.erase(it1, it2);
+			// Measure the distance of it1 and it2 to the beggining of dropped.
+			auto distanceIt1 = std::distance(this->dropped.begin(), it1);
+			auto distanceIt2 = std::distance(this->dropped.begin(), it2);
+
+			// it2 goes out of range, only it1 is within the range.
+			if (distanceIt2 < distanceIt1)
+			{
+				this->dropped.erase(it1);
+			}
+			else
+			{
+				this->dropped.erase(it1, it2);
+			}
 		}
 
 		// Adapt base.

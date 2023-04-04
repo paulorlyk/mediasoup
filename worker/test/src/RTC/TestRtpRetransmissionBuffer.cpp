@@ -230,6 +230,51 @@ SCENARIO("RtpRetransmissionBuffer", "[rtp][rtx]")
 		// clang-format on
 	}
 
+	SECTION("packet with very newest timestamp is inserted as newest item despite its seq is old")
+	{
+		uint16_t maxItems{ 4 };
+		uint32_t maxRetransmissionDelayMs{ 2000u };
+		uint32_t clockRate{ 90000 };
+
+		RtpMyRetransmissionBuffer myRetransmissionBuffer(maxItems, maxRetransmissionDelayMs, clockRate);
+
+		// Scenario based on https://github.com/versatica/mediasoup/issues/1037.
+
+		myRetransmissionBuffer.Insert(24816, 1024930187);
+		myRetransmissionBuffer.Insert(24980, 1025106407);
+		myRetransmissionBuffer.Insert(18365, 1026593387);
+
+		// clang-format off
+		myRetransmissionBuffer.AssertBuffer(
+			{
+				{ true, 18365, 1026593387 }
+			}
+		);
+		// clang-format on
+	}
+
+	SECTION(
+	  "packet with lower seq than newest packet in the buffer and higher timestamp forces buffer emptying")
+	{
+		uint16_t maxItems{ 4 };
+		uint32_t maxRetransmissionDelayMs{ 2000u };
+		uint32_t clockRate{ 90000 };
+
+		RtpMyRetransmissionBuffer myRetransmissionBuffer(maxItems, maxRetransmissionDelayMs, clockRate);
+
+		myRetransmissionBuffer.Insert(33331, 1000000001);
+		myRetransmissionBuffer.Insert(33332, 1000000002);
+		myRetransmissionBuffer.Insert(33330, 1000000003);
+
+		// clang-format off
+		myRetransmissionBuffer.AssertBuffer(
+			{
+				{ true, 33330, 1000000003 }
+			}
+		);
+		// clang-format on
+	}
+
 	SECTION("fuzzer generated packets")
 	{
 		uint16_t maxItems{ 2500u };
