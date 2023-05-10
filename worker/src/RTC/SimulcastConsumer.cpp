@@ -668,11 +668,21 @@ namespace RTC
 	{
 		MS_TRACE();
 
+		packet->logger.consumerId = this->id;
+
 		if (!IsActive())
+		{
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::CONSUMER_INACTIVE);
+
 			return;
+		}
 
 		if (this->targetTemporalLayer == -1)
+		{
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::INVALID_TARGET_LAYER);
+
 			return;
+		}
 
 		auto payloadType = packet->GetPayloadType();
 
@@ -681,6 +691,8 @@ namespace RTC
 		if (!this->supportedCodecPayloadTypes[payloadType])
 		{
 			MS_DEBUG_DEV("payload type not supported [payloadType:%" PRIu8 "]", payloadType);
+
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::UNSUPPORTED_PAYLOAD_TYPE);
 
 			return;
 		}
@@ -694,7 +706,11 @@ namespace RTC
 		{
 			// Ignore if not a key frame.
 			if (!packet->IsKeyFrame())
+			{
+				packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::NOT_A_KEYFRAME);
+
 				return;
+			}
 
 			shouldSwitchCurrentSpatialLayer = true;
 
@@ -706,12 +722,18 @@ namespace RTC
 		// drop it.
 		else if (spatialLayer != this->currentSpatialLayer)
 		{
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::SPATIAL_LAYER_MISMATCH);
+
 			return;
 		}
 
 		// If we need to sync and this is not a key frame, ignore the packet.
 		if (this->syncRequired && !packet->IsKeyFrame())
+		{
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::NOT_A_KEYFRAME);
+
 			return;
+		}
 
 		// Whether this is the first packet after re-sync.
 		const bool isSyncPacket = this->syncRequired;
@@ -818,6 +840,8 @@ namespace RTC
 					this->syncRequired       = false;
 					this->spatialLayerToSync = -1;
 
+					packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::TOO_HIGH_TIMESTAMP_EXTRA_NEEDED);
+
 					return;
 				}
 
@@ -858,6 +882,9 @@ namespace RTC
 			if (SeqManager<uint16_t>::IsSeqLowerThan(
 			      packet->GetSequenceNumber(), this->snReferenceSpatialLayer))
 			{
+				packet->logger.Dropped(
+				  RtcLogger::RtpPacket::DropReason::PACKET_PREVIOUS_TO_SPATIAL_LAYER_SWITCH);
+
 				return;
 			}
 			else if (SeqManager<uint16_t>::IsSeqHigherThan(
@@ -902,6 +929,8 @@ namespace RTC
 			{
 				this->rtpSeqManager.Drop(packet->GetSequenceNumber());
 
+				packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::DROPPED_BY_CODEC);
+
 				return;
 			}
 
@@ -928,6 +957,9 @@ namespace RTC
 		packet->SetPayloadType(this->rtpStream->GetPayloadType());
 
 		this->consumerRtpMapping.MapRTPHeaderExtensions(packet, false);
+
+		packet->logger.sendRtpTimestamp = timestamp;
+		packet->logger.sendSeqNumber    = seq;
 
 		if (isSyncPacket)
 		{
@@ -967,6 +999,8 @@ namespace RTC
 			  origSsrc,
 			  origSeq,
 			  origTimestamp);
+
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::SEND_RTP_STREAM_DISCARDED);
 		}
 
 		// Restore packet fields.
