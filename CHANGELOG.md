@@ -1,9 +1,55 @@
 # Changelog
 
+### 3.12.8
+
+* Export `workerBin` absolute path ([PR #1123](https://github.com/versatica/mediasoup/pull/1123)).
+
+
+### 3.12.7
+
+* `SimulcastConsumer`: Fix lack of "layerschange" event when all streams in the producer die ([PR #1122](https://github.com/versatica/mediasoup/pull/1122)).
+
+
+### 3.12.6
+
+* `Worker`: Add `Transport::Destroying()` protected method ([PR #1114](https://github.com/versatica/mediasoup/pull/1114)).
+* `RtpStreamRecv`: Fix jitter calculation ([PR #1117](https://github.com/versatica/mediasoup/pull/1117), thanks to @penguinol).
+* Revert "Node: make types.ts only export types rather than the entire class/code" ([PR #1109](https://github.com/versatica/mediasoup/pull/1109)) because it requires `typescript` >= 5 in the apps that import mediasoup and we don't want to be that strict yet.
+
+
+### 3.12.5
+
+* `DataConsumer`: Fix removed 'bufferedamountlow' notification ([PR #1113](https://github.com/versatica/mediasoup/pull/1113)).
+
+
+### 3.12.4
+
+* Fix downloaded prebuilt binary check on Windows ([PR #1105](https://github.com/versatica/mediasoup/pull/1105) by @woodfe).
+
+
+### 3.12.3
+
+Migrate `npm-scripts.js` to `npm-scripts.mjs` (ES Module) ([PR #1093](https://github.com/versatica/mediasoup/pull/1093)).
+
+
+### 3.12.2
+
+* CI: Use `ubuntu-20.04` to build mediasoup-worker prebuilt on Linux ([PR #1092](https://github.com/versatica/mediasoup/pull/1092)).
+
+
+### 3.12.1
+
+* mediasoup-worker prebuild: Fallback to local building if fetched binary doesn't run on current host ([PR #1090](https://github.com/versatica/mediasoup/pull/1090)).
+
+
+### 3.12.0
+
+* Automate and publish prebuilt `mediasoup-worker` binaries ([PR #1087](https://github.com/versatica/mediasoup/pull/1087), thanks to @barlock for his work in ([PR #1083](https://github.com/versatica/mediasoup/pull/1083)).
+
 
 ### 3.11.26
 
-* `Worker`: Fix NACK timer and avoid negative RTT ([PR #1082](https://github.com/versatica/mediasoup/pull/1082), thanks to o-u-p for his work in ([PR #1076](https://github.com/versatica/mediasoup/pull/1076)).
+* `Worker`: Fix NACK timer and avoid negative RTT ([PR #1082](https://github.com/versatica/mediasoup/pull/1082), thanks to @o-u-p for his work in ([PR #1076](https://github.com/versatica/mediasoup/pull/1076)).
 
 
 ### 3.11.25
