@@ -1,5 +1,31 @@
 # Changelog
 
+
+### 3.12.13
+
+* Bump up Meson from 1.1.0 to 1.2.1 (fixes Xcode 15 build issues) ([PR #1163](https://github.com/versatica/mediasoup/pull/1163) by @arcinston).
+
+
+### 3.12.12
+
+* Support C++20 ([PR #1150](https://github.com/versatica/mediasoup/pull/1150) by @o-u-p).
+
+
+### 3.12.11
+
+* Google Transport Feedback: Read Reference Time field as 24bits signed as per spec ([PR #1145](https://github.com/versatica/mediasoup/pull/1145)).
+
+
+### 3.12.10
+
+* Node: Rename `WebRtcTransport.webRtcServerClosed()` to `listenServerClosed()` ([PR #1141](https://github.com/versatica/mediasoup/pull/1141) by @piranna).
+
+
+### 3.12.9
+
+* Fix RTCP SDES ([PR #1139](https://github.com/versatica/mediasoup/pull/1139)).
+
+
 ### 3.12.8
 
 * Export `workerBin` absolute path ([PR #1123](https://github.com/versatica/mediasoup/pull/1123)).
