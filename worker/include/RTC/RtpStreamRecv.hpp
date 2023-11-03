@@ -81,6 +81,11 @@ namespace RTC
 			return this->useRtpInactivityCheck;
 		}
 
+		uint64_t GetlastSrReceived() const
+		{
+			return this->lastSrReceived;
+		}
+
 	private:
 		void CalculateJitter(uint32_t rtpTimestamp);
 		void UpdateScore();

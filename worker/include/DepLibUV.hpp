@@ -17,15 +17,15 @@ public:
 	}
 	static uint64_t GetTimeMs()
 	{
-		return static_cast<uint64_t>(uv_hrtime() / 1000000u);
+		return static_cast<uint64_t>(GetTimeNs() / 1000000u);
 	}
 	static uint64_t GetTimeUs()
 	{
-		return static_cast<uint64_t>(uv_hrtime() / 1000u);
+		return static_cast<uint64_t>(GetTimeNs() / 1000u);
 	}
 	static uint64_t GetTimeNs()
 	{
-		return uv_hrtime();
+		return uv_hrtime() + hrTimeNtpDiffNs;
 	}
 	// Used within libwebrtc dependency which uses int64_t values for time
 	// representation.
@@ -42,6 +42,7 @@ public:
 
 private:
 	thread_local static uv_loop_t* loop;
+	static int64_t hrTimeNtpDiffNs;
 };
 
 #endif

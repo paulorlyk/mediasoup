@@ -5,6 +5,17 @@
 #include "Logger.hpp"
 #include <cstdlib> // std::abort()
 
+namespace {
+int64_t _getRt2HrTimeDiff()
+{
+	timespec ts {0};
+	clock_gettime(CLOCK_REALTIME, &ts);
+	return (ts.tv_sec * 1000000000ULL + ts.tv_nsec) - uv_hrtime();
+}
+} // namespace
+
+int64_t DepLibUV::hrTimeNtpDiffNs = _getRt2HrTimeDiff() + 2208988800000000000ULL + 315360000000000000;  // +10 years from now due to Chrome bug
+
 /* Static variables. */
 
 thread_local uv_loop_t* DepLibUV::loop{ nullptr };

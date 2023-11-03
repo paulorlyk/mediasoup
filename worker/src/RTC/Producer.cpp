@@ -1332,6 +1332,27 @@ namespace RTC
 			{
 				std::memcpy(bufferPtr, extenValue, extenLen);
 
+				const auto rtt = rtpStream->GetRtt();
+				const auto timestamp = rtpStream->GetlastSrReceived();
+				const auto remoteTimestamp = rtpStream->GetSenderReportNtpMs();
+
+				// Update estimated capture clock offset
+				if(extenLen == 16 && rtt >= 0.0f && timestamp && remoteTimestamp)
+				{
+					const double estimatedClockOffsetMs = double(timestamp) - (double(remoteTimestamp) + rtt / 2.0);
+
+					double estimatedClockOffsetNtp = std::round(estimatedClockOffsetMs * (1LL << 32) / 1000.0);
+					if(estimatedClockOffsetNtp >= double(std::numeric_limits<int64_t>::max()))
+						estimatedClockOffsetNtp = double(std::numeric_limits<int64_t>::max());
+					else if(estimatedClockOffsetNtp <= double(std::numeric_limits<int64_t>::min()))
+						estimatedClockOffsetNtp = double(std::numeric_limits<int64_t>::min());
+
+					int64_t captureClockOffset = be64toh(((uint64_t *)bufferPtr)[1]);
+					captureClockOffset += estimatedClockOffsetNtp;
+
+					((uint64_t *)bufferPtr)[1] = htobe64(captureClockOffset);
+				}
+
 				extensions.emplace_back(
 				  static_cast<uint8_t>(RTC::RtpHeaderExtensionUri::Type::ABS_CAPTURE_TIME),
 				  extenLen,
