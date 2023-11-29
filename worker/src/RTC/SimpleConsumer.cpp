@@ -1,11 +1,12 @@
+#include "FBS/consumer.h"
 #define MS_CLASS "RTC::SimpleConsumer"
 // #define MS_LOG_DEV_LEVEL 3
 
-#include "RTC/SimpleConsumer.hpp"
 #include "DepLibUV.hpp"
 #include "Logger.hpp"
 #include "MediaSoupErrors.hpp"
 #include "RTC/Codecs/Tools.hpp"
+#include "RTC/SimpleConsumer.hpp"
 
 namespace RTC
 {
@@ -16,10 +17,9 @@ namespace RTC
 	  const std::string& id,
 	  const std::string& producerId,
 	  RTC::Consumer::Listener* listener,
-	  json& data)
-	  : RTC::Consumer::Consumer(
-	      shared, id, producerId, listener, data, RTC::RtpParameters::Type::SIMPLE),
-	    consumerRtpMapping(data)
+	  const FBS::Transport::ConsumeRequest* data)
+	  : RTC::Consumer::Consumer(shared, id, producerId, listener, data, RTC::RtpParameters::Type::SIMPLE),
+      consumerRtpMapping(data)
 	{
 		MS_TRACE();
 
@@ -30,7 +30,9 @@ namespace RTC
 
 		// Ensure there is a single encoding.
 		if (this->consumableRtpEncodings.size() != 1u)
+		{
 			MS_THROW_TYPE_ERROR("invalid consumableRtpEncodings with size != 1");
+		}
 
 		auto& encoding         = this->rtpParameters.encodings[0];
 		const auto* mediaCodec = this->rtpParameters.GetCodecForEncoding(encoding);
@@ -51,22 +53,15 @@ namespace RTC
 			this->encodingContext.reset(
 			  RTC::Codecs::Tools::GetEncodingContext(mediaCodec->mimeType, params));
 
-			auto jsonIgnoreDtx = data.find("ignoreDtx");
-
-			if (jsonIgnoreDtx != data.end() && jsonIgnoreDtx->is_boolean())
-			{
-				auto ignoreDtx = jsonIgnoreDtx->get<bool>();
-
-				this->encodingContext->SetIgnoreDtx(ignoreDtx);
-			}
+			// ignoreDtx is set to false by default.
+			this->encodingContext->SetIgnoreDtx(data->ignoreDtx());
 		}
 
 		// NOTE: This may throw.
 		this->shared->channelMessageRegistrator->RegisterHandler(
 		  this->id,
 		  /*channelRequestHandler*/ this,
-		  /*payloadChannelRequestHandler*/ nullptr,
-		  /*payloadChannelNotificationHandler*/ nullptr);
+		  /*channelNotificationHandler*/ nullptr);
 	}
 
 	SimpleConsumer::~SimpleConsumer()
@@ -78,73 +73,98 @@ namespace RTC
 		delete this->rtpStream;
 	}
 
-	void SimpleConsumer::FillJson(json& jsonObject) const
+	flatbuffers::Offset<FBS::Consumer::DumpResponse> SimpleConsumer::FillBuffer(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
 		// Call the parent method.
-		RTC::Consumer::FillJson(jsonObject);
+		auto base = RTC::Consumer::FillBuffer(builder);
 
-		// Add consumerRtpMapping.
-		consumerRtpMapping.FillJson(jsonObject);
+        // Add consumerRtpMapping.
+        consumerRtpMapping.FillJson(jsonObject);
 
 		// Add rtpStream.
-		this->rtpStream->FillJson(jsonObject["rtpStream"]);
+		std::vector<flatbuffers::Offset<FBS::RtpStream::Dump>> rtpStreams;
+		rtpStreams.emplace_back(this->rtpStream->FillBuffer(builder));
+
+		auto dump = FBS::Consumer::CreateConsumerDumpDirect(builder, base, &rtpStreams);
+
+		return FBS::Consumer::CreateDumpResponse(builder, dump);
 	}
 
-	void SimpleConsumer::FillJsonStats(json& jsonArray) const
+	flatbuffers::Offset<FBS::Consumer::GetStatsResponse> SimpleConsumer::FillBufferStats(
+	  flatbuffers::FlatBufferBuilder& builder)
 	{
 		MS_TRACE();
 
+		std::vector<flatbuffers::Offset<FBS::RtpStream::Stats>> rtpStreams;
+
 		// Add stats of our send stream.
-		jsonArray.emplace_back(json::value_t::object);
-		this->rtpStream->FillJsonStats(jsonArray[0]);
+		rtpStreams.emplace_back(this->rtpStream->FillBufferStats(builder));
 
 		// Add stats of our recv stream.
 		if (this->producerRtpStream)
 		{
-			jsonArray.emplace_back(json::value_t::object);
-			this->producerRtpStream->FillJsonStats(jsonArray[1]);
+			rtpStreams.emplace_back(this->producerRtpStream->FillBufferStats(builder));
 		}
+
+		return FBS::Consumer::CreateGetStatsResponseDirect(builder, &rtpStreams);
 	}
 
-	void SimpleConsumer::FillJsonScore(json& jsonObject) const
+	flatbuffers::Offset<FBS::Consumer::ConsumerScore> SimpleConsumer::FillBufferScore(
+	  flatbuffers::FlatBufferBuilder& builder) const
 	{
 		MS_TRACE();
 
 		MS_ASSERT(this->producerRtpStreamScores, "producerRtpStreamScores not set");
 
-		jsonObject["score"] = this->rtpStream->GetScore();
+		uint8_t producerScore{ 0 };
 
 		if (this->producerRtpStream)
-			jsonObject["producerScore"] = this->producerRtpStream->GetScore();
-		else
-			jsonObject["producerScore"] = 0;
+		{
+			producerScore = this->producerRtpStream->GetScore();
+		}
 
-		jsonObject["producerScores"] = *this->producerRtpStreamScores;
+		return FBS::Consumer::CreateConsumerScoreDirect(
+		  builder, this->rtpStream->GetScore(), producerScore, this->producerRtpStreamScores);
 	}
 
 	void SimpleConsumer::HandleRequest(Channel::ChannelRequest* request)
 	{
 		MS_TRACE();
 
-		switch (request->methodId)
+		switch (request->method)
 		{
-			case Channel::ChannelRequest::MethodId::CONSUMER_REQUEST_KEY_FRAME:
+			case Channel::ChannelRequest::Method::CONSUMER_DUMP:
+			{
+				auto dumpOffset = FillBuffer(request->GetBufferBuilder());
+
+				request->Accept(FBS::Response::Body::Consumer_DumpResponse, dumpOffset);
+
+				break;
+			}
+
+			case Channel::ChannelRequest::Method::CONSUMER_REQUEST_KEY_FRAME:
 			{
 				if (IsActive())
+				{
 					RequestKeyFrame();
+				}
 
 				request->Accept();
 
 				break;
 			}
 
-			case Channel::ChannelRequest::MethodId::CONSUMER_SET_PREFERRED_LAYERS:
+			case Channel::ChannelRequest::Method::CONSUMER_SET_PREFERRED_LAYERS:
 			{
-				// Do nothing.
+				// Accept with empty preferred layers object.
 
-				request->Accept();
+				auto responseOffset =
+				  FBS::Consumer::CreateSetPreferredLayersResponse(request->GetBufferBuilder());
+
+				request->Accept(FBS::Response::Body::Consumer_SetPreferredLayersResponse, responseOffset);
 
 				break;
 			}
@@ -198,10 +218,14 @@ namespace RTC
 
 		// Audio SimpleConsumer does not play the BWE game.
 		if (this->kind != RTC::Media::Kind::VIDEO)
+		{
 			return 0u;
+		}
 
 		if (!IsActive())
+		{
 			return 0u;
+		}
 
 		return this->priority;
 	}
@@ -217,7 +241,9 @@ namespace RTC
 		// If this is not the first time this method is called within the same iteration,
 		// return 0 since a video SimpleConsumer does not keep state about this.
 		if (this->managingBitrate)
+		{
 			return 0u;
+		}
 
 		this->managingBitrate = true;
 
@@ -236,9 +262,13 @@ namespace RTC
 		auto desiredBitrate = this->producerRtpStream->GetBitrate(nowMs);
 
 		if (desiredBitrate < bitrate)
+		{
 			return desiredBitrate;
+		}
 		else
+		{
 			return bitrate;
+		}
 	}
 
 	void SimpleConsumer::ApplyLayers()
@@ -262,10 +292,14 @@ namespace RTC
 
 		// Audio SimpleConsumer does not play the BWE game.
 		if (this->kind != RTC::Media::Kind::VIDEO)
+		{
 			return 0u;
+		}
 
 		if (!IsActive())
+		{
 			return 0u;
+		}
 
 		auto nowMs          = DepLibUV::GetTimeMs();
 		auto desiredBitrate = this->producerRtpStream->GetBitrate(nowMs);
@@ -275,7 +309,9 @@ namespace RTC
 		auto maxBitrate = this->rtpParameters.encodings[0].maxBitrate;
 
 		if (maxBitrate > desiredBitrate)
+		{
 			desiredBitrate = maxBitrate;
+		}
 
 		return desiredBitrate;
 	}
@@ -340,7 +376,9 @@ namespace RTC
 		if (isSyncPacket)
 		{
 			if (packet->IsKeyFrame())
+			{
 				MS_DEBUG_TAG(rtp, "sync key frame received");
+			}
 
 			this->rtpSeqManager.Sync(packet->GetSequenceNumber() - 1);
 
@@ -413,29 +451,27 @@ namespace RTC
 		MS_TRACE();
 
 		if (static_cast<float>((nowMs - this->lastRtcpSentTime) * 1.15) < this->maxRtcpInterval)
+		{
 			return true;
+		}
 
 		auto* senderReport = this->rtpStream->GetRtcpSenderReport(nowMs);
 
 		if (!senderReport)
+		{
 			return true;
+		}
 
 		// Build SDES chunk for this sender.
 		auto* sdesChunk = this->rtpStream->GetRtcpSdesChunk();
 
-		RTC::RTCP::DelaySinceLastRr* delaySinceLastRrReport{ nullptr };
-
-		auto* dlrr = this->rtpStream->GetRtcpXrDelaySinceLastRr(nowMs);
-
-		if (dlrr)
-		{
-			delaySinceLastRrReport = new RTC::RTCP::DelaySinceLastRr();
-			delaySinceLastRrReport->AddSsrcInfo(dlrr);
-		}
+		auto* delaySinceLastRrSsrcInfo = this->rtpStream->GetRtcpXrDelaySinceLastRrSsrcInfo(nowMs);
 
 		// RTCP Compound packet buffer cannot hold the data.
-		if (!packet->Add(senderReport, sdesChunk, delaySinceLastRrReport))
+		if (!packet->Add(senderReport, sdesChunk, delaySinceLastRrSsrcInfo))
+		{
 			return false;
+		}
 
 		this->lastRtcpSentTime = nowMs;
 
@@ -448,13 +484,17 @@ namespace RTC
 		MS_TRACE();
 
 		if (!IsActive())
+		{
 			return;
+		}
 
 		auto fractionLost = this->rtpStream->GetFractionLost();
 
 		// If our fraction lost is worse than the given one, update it.
 		if (fractionLost > worstRemoteFractionLost)
+		{
 			worstRemoteFractionLost = fractionLost;
+		}
 	}
 
 	void SimpleConsumer::ReceiveNack(RTC::RTCP::FeedbackRtpNackPacket* nackPacket)
@@ -462,7 +502,9 @@ namespace RTC
 		MS_TRACE();
 
 		if (!IsActive())
+		{
 			return;
+		}
 
 		// May emit 'trace' event.
 		EmitTraceEventNackType();
@@ -497,7 +539,9 @@ namespace RTC
 		this->rtpStream->ReceiveKeyFrameRequest(messageType);
 
 		if (IsActive())
+		{
 			RequestKeyFrame();
+		}
 	}
 
 	void SimpleConsumer::ReceiveRtcpReceiverReport(RTC::RTCP::ReceiverReport* report)
@@ -519,7 +563,9 @@ namespace RTC
 		MS_TRACE();
 
 		if (!IsActive())
+		{
 			return 0u;
+		}
 
 		return this->rtpStream->GetBitrate(nowMs);
 	}
@@ -538,7 +584,9 @@ namespace RTC
 		this->syncRequired = true;
 
 		if (IsActive())
+		{
 			RequestKeyFrame();
+		}
 	}
 
 	void SimpleConsumer::UserOnTransportDisconnected()
@@ -555,7 +603,9 @@ namespace RTC
 		this->rtpStream->Pause();
 
 		if (this->externallyManagedBitrate && this->kind == RTC::Media::Kind::VIDEO)
+		{
 			this->listener->OnConsumerNeedZeroBitrate(this);
+		}
 	}
 
 	void SimpleConsumer::UserOnResumed()
@@ -565,7 +615,9 @@ namespace RTC
 		this->syncRequired = true;
 
 		if (IsActive())
+		{
 			RequestKeyFrame();
+		}
 	}
 
 	void SimpleConsumer::CreateRtpStream()
@@ -638,13 +690,16 @@ namespace RTC
 
 		// If the Consumer is paused, tell the RtpStreamSend.
 		if (IsPaused() || IsProducerPaused())
+		{
 			this->rtpStream->Pause();
+		}
 
 		const auto* rtxCodec = this->rtpParameters.GetRtxCodecForEncoding(encoding);
 
 		if (rtxCodec && encoding.hasRtx)
-			this->rtpStream->SetRtx(
-			  this->consumerRtpMapping.MapPayloadType(rtxCodec->payloadType), encoding.rtx.ssrc);
+		{
+			this->rtpStream->SetRtx(this->consumerRtpMapping.MapPayloadType(rtxCodec->payloadType), encoding.rtx.ssrc);
+		}
 	}
 
 	void SimpleConsumer::RequestKeyFrame()
@@ -652,7 +707,9 @@ namespace RTC
 		MS_TRACE();
 
 		if (this->kind != RTC::Media::Kind::VIDEO)
+		{
 			return;
+		}
 
 		auto mappedSsrc = this->consumableRtpEncodings[0].ssrc;
 
@@ -663,11 +720,16 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		json data = json::object();
+		auto scoreOffset = FillBufferScore(this->shared->channelNotifier->GetBufferBuilder());
 
-		FillJsonScore(data);
+		auto notificationOffset = FBS::Consumer::CreateScoreNotification(
+		  this->shared->channelNotifier->GetBufferBuilder(), scoreOffset);
 
-		this->shared->channelNotifier->Emit(this->id, "score", data);
+		this->shared->channelNotifier->Emit(
+		  this->id,
+		  FBS::Notification::Event::CONSUMER_SCORE,
+		  FBS::Notification::Body::Consumer_ScoreNotification,
+		  notificationOffset);
 	}
 
 	inline void SimpleConsumer::OnRtpStreamScore(

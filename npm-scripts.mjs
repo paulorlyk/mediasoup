@@ -1,16 +1,17 @@
-import process from 'process';
-import os from 'os';
-import fs from 'fs';
-import path from 'path';
-import { execSync, spawnSync } from 'child_process';
+import process from 'node:process';
+import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
+import { execSync } from 'node:child_process';
 import fetch from 'node-fetch';
 import tar from 'tar';
 
 const PKG = JSON.parse(fs.readFileSync('./package.json').toString());
-const IS_FREEBSD = os.platform() === 'freebsd';
 const IS_WINDOWS = os.platform() === 'win32';
 const MAYOR_VERSION = PKG.version.split('.')[0];
-const MAKE = process.env.MAKE || (IS_FREEBSD ? 'gmake' : 'make');
+const PYTHON = getPython();
+const PIP_INVOKE_DIR = path.resolve('worker/pip_invoke');
+const FLATBUFFERS_VERSION = '23.3.3';
 const WORKER_RELEASE_DIR = 'worker/out/Release';
 const WORKER_RELEASE_BIN = IS_WINDOWS ? 'mediasoup-worker.exe' : 'mediasoup-worker';
 const WORKER_RELEASE_BIN_PATH = `${WORKER_RELEASE_DIR}/${WORKER_RELEASE_BIN}`;
@@ -22,28 +23,52 @@ const GH_REPO = 'mediasoup';
 
 const task = process.argv.slice(2).join(' ');
 
+// PYTHONPATH env must be updated now so all invoke calls below will find the
+// pip invoke module.
+if (process.env.PYTHONPATH)
+{
+	if (IS_WINDOWS)
+	{
+		process.env.PYTHONPATH = `${PIP_INVOKE_DIR};${process.env.PYTHONPATH}`;
+	}
+	else
+	{
+		process.env.PYTHONPATH = `${PIP_INVOKE_DIR}:${process.env.PYTHONPATH}`;
+	}
+}
+else
+{
+	process.env.PYTHONPATH = PIP_INVOKE_DIR;
+}
+
 run();
 
 async function run()
 {
 	switch (task)
 	{
+		case 'preinstall':
+		{
+			installInvoke();
+
+			break;
+		}
+
 		// As per NPM documentation (https://docs.npmjs.com/cli/v9/using-npm/scripts)
 		// `prepare` script:
 		//
-		// - Runs BEFORE the package is packed, i.e. during `npm publish` and
-		//   `npm pack`.
+		// - Runs BEFORE the package is packed, i.e. during `npm publish` and `npm pack`.
 		// - Runs on local `npm install` without any arguments.
 		// - NOTE: If a package being installed through git contains a `prepare` script,
 		//   its dependencies and devDependencies will be installed, and the `prepare`
 		//   script will be run, before the package is packaged and installed.
 		//
-		// So here we compile TypeScript and flatbuffers to JavaScript.
+		// So here we generate flatbuffers definitions for TypeScript and compile
+		// TypeScript to JavaScript.
 		case 'prepare':
 		{
-			buildTypescript(/* force */ false);
-
-			// TODO: Compile flatbuffers.
+			flatcNode();
+			buildTypescript({ force: false });
 
 			break;
 		}
@@ -86,7 +111,11 @@ async function run()
 				logInfo(`couldn't fetch any mediasoup-worker prebuilt binary, building it locally`);
 
 				buildWorker();
-				cleanWorkerArtifacts();
+
+				if (!process.env.MEDIASOUP_LOCAL_DEV)
+				{
+					cleanWorkerArtifacts();
+				}
 			}
 
 			break;
@@ -95,8 +124,7 @@ async function run()
 		case 'typescript:build':
 		{
 			installNodeDeps();
-			buildTypescript(/* force */ true);
-			replaceVersion();
+			buildTypescript({ force: true });
 
 			break;
 		}
@@ -139,15 +167,28 @@ async function run()
 
 		case 'format:worker':
 		{
-			executeCmd(`${MAKE} format -C worker`);
+			executeCmd(`"${PYTHON}" -m invoke -r worker format`);
+
+			break;
+		}
+
+		case 'flatc:node':
+		{
+			flatcNode();
+
+			break;
+		}
+
+		case 'flatc:worker':
+		{
+			flatcWorker();
 
 			break;
 		}
 
 		case 'test:node':
 		{
-			buildTypescript(/* force */ false);
-			replaceVersion();
+			buildTypescript({ force: false });
 			testNode();
 
 			break;
@@ -162,24 +203,9 @@ async function run()
 
 		case 'coverage:node':
 		{
-			buildTypescript(/* force */ false);
-			replaceVersion();
+			buildTypescript({ force: false });
 			executeCmd('jest --coverage');
 			executeCmd('open-cli coverage/lcov-report/index.html');
-
-			break;
-		}
-
-		case 'install-deps:node':
-		{
-			installNodeDeps();
-
-			break;
-		}
-
-		case 'install-clang-tools':
-		{
-			executeCmd('npm ci --prefix worker/scripts');
 
 			break;
 		}
@@ -232,6 +258,7 @@ async function run()
 			// and upload it to the release.
 			if (os.platform() === 'darwin' && os.arch() === 'arm64')
 			{
+				await prebuildWorker();
 				await uploadMacArmPrebuiltWorker();
 			}
 
@@ -258,29 +285,41 @@ async function run()
 	}
 }
 
-function replaceVersion()
+function getPython()
 {
-	logInfo('replaceVersion()');
+	let python = process.env.PYTHON;
 
-	const files = fs.readdirSync('node/lib',
-		{
-			withFileTypes : true,
-			recursive     : false
-		});
-
-	for (const file of files)
+	if (!python)
 	{
-		if (!file.isFile())
+		try
 		{
-			continue;
+			execSync('python3 --version', { stdio: [ 'ignore', 'ignore', 'ignore' ] });
+			python = 'python3';
 		}
-
-		const filePath = path.join('node/lib', file.name);
-		const text = fs.readFileSync(filePath, { encoding: 'utf8' });
-		const result = text.replace(/__MEDIASOUP_VERSION__/g, PKG.version);
-
-		fs.writeFileSync(filePath, result, { encoding: 'utf8' });
+		catch (error)
+		{
+			python = 'python';
+		}
 	}
+
+	return python;
+}
+
+function installInvoke()
+{
+	if (fs.existsSync(PIP_INVOKE_DIR))
+	{
+		return;
+	}
+
+	logInfo('installInvoke()');
+
+	// Install pip invoke into custom location, so we don't depend on system-wide
+	// installation.
+	executeCmd(
+		`"${PYTHON}" -m pip install --upgrade --target="${PIP_INVOKE_DIR}" invoke`,
+		/* exitOnError */ true
+	);
 }
 
 function deleteNodeLib()
@@ -292,18 +331,10 @@ function deleteNodeLib()
 
 	logInfo('deleteNodeLib()');
 
-	if (!IS_WINDOWS)
-	{
-		executeCmd('rm -rf node/lib');
-	}
-	else
-	{
-		// NOTE: This command fails in Windows if the dir doesn't exist.
-		executeCmd('rmdir /s /q "node/lib"', /* exitOnError */ false);
-	}
+	fs.rmSync('node/lib', { recursive: true, force: true });
 }
 
-function buildTypescript(force = false)
+function buildTypescript({ force = false } = { force: false })
 {
 	if (!force && fs.existsSync('node/lib'))
 	{
@@ -320,22 +351,7 @@ function buildWorker()
 {
 	logInfo('buildWorker()');
 
-	if (IS_WINDOWS)
-	{
-		if (!fs.existsSync('worker/out/msys/bin/make.exe'))
-		{
-			installMsysMake();
-		}
-
-		const msysPath = `${process.cwd()}\\worker\\out\\msys\\bin`;
-
-		if (!process.env.PATH.includes(msysPath))
-		{
-			process.env.PATH = `${msysPath};${process.env.PATH}`;
-		}
-	}
-
-	executeCmd(`${MAKE} -C worker`);
+	executeCmd(`"${PYTHON}" -m invoke -r worker mediasoup-worker`);
 }
 
 function cleanWorkerArtifacts()
@@ -343,30 +359,58 @@ function cleanWorkerArtifacts()
 	logInfo('cleanWorkerArtifacts()');
 
 	// Clean build artifacts except `mediasoup-worker`.
-	executeCmd(`${MAKE} clean-build -C worker`);
+	executeCmd(`"${PYTHON}" -m invoke -r worker clean-build`);
 	// Clean downloaded dependencies.
-	executeCmd(`${MAKE} clean-subprojects -C worker`);
+	executeCmd(`"${PYTHON}" -m invoke -r worker clean-subprojects`);
 	// Clean PIP/Meson/Ninja.
-	executeCmd(`${MAKE} clean-pip -C worker`);
-
-	if (IS_WINDOWS)
-	{
-		executeCmd('rd /s /q worker\\out\\msys');
-	}
+	executeCmd(`"${PYTHON}" -m invoke -r worker clean-pip`);
 }
 
 function lintNode()
 {
 	logInfo('lintNode()');
 
-	executeCmd('eslint -c node/.eslintrc.js --max-warnings 0 node/src node/.eslintrc.js npm-scripts.mjs worker/scripts/gulpfile.mjs');
+	executeCmd('eslint -c node/.eslintrc.js --ignore-path node/.eslintignore --max-warnings 0 node/src node/.eslintrc.js npm-scripts.mjs worker/scripts/clang-format.mjs');
 }
 
 function lintWorker()
 {
 	logInfo('lintWorker()');
 
-	executeCmd(`${MAKE} lint -C worker`);
+	executeCmd(`"${PYTHON}" -m invoke -r worker lint`);
+}
+
+function flatcNode()
+{
+	logInfo('flatcNode()');
+
+	// Build flatc if needed.
+	executeCmd(`"${PYTHON}" -m invoke -r worker flatc`);
+
+	const buildType = process.env.MEDIASOUP_BUILDTYPE || 'Release';
+	const extension = IS_WINDOWS ? '.exe' : '';
+	const flatc = path.resolve(path.join(
+		'worker', 'out', buildType, 'build', 'subprojects', `flatbuffers-${FLATBUFFERS_VERSION}`, `flatc${extension}`));
+	const out = path.resolve(path.join('node', 'src'));
+
+	for (const dirent of fs.readdirSync(path.join('worker', 'fbs'), { withFileTypes: true }))
+	{
+		if (!dirent.isFile() || path.parse(dirent.name).ext !== '.fbs')
+		{
+			continue;
+		}
+
+		const filePath = path.resolve(path.join('worker', 'fbs', dirent.name));
+
+		executeCmd(`"${flatc}" --ts --ts-no-import-ext --gen-object-api -o "${out}" "${filePath}"`);
+	}
+}
+
+function flatcWorker()
+{
+	logInfo('flatcWorker()');
+
+	executeCmd(`"${PYTHON}" -m invoke -r worker flatc`);
 }
 
 function testNode()
@@ -379,7 +423,7 @@ function testNode()
 	}
 	else
 	{
-		executeCmd(`jest --testPathPattern ${process.env.TEST_FILE}`);
+		executeCmd(`jest --testPathPattern "${process.env.TEST_FILE}"`);
 	}
 }
 
@@ -387,7 +431,7 @@ function testWorker()
 {
 	logInfo('testWorker()');
 
-	executeCmd(`${MAKE} test -C worker`);
+	executeCmd(`"${PYTHON}" -m invoke -r worker test`);
 }
 
 function installNodeDeps()
@@ -405,34 +449,13 @@ function checkRelease()
 	logInfo('checkRelease()');
 
 	installNodeDeps();
-	buildTypescript(/* force */ true);
-	replaceVersion();
+	flatcNode();
+	buildTypescript({ force: true });
 	buildWorker();
 	lintNode();
 	lintWorker();
 	testNode();
 	testWorker();
-}
-
-function installMsysMake()
-{
-	logInfo('installMsysMake()');
-
-	let res = spawnSync('where', [ 'python3.exe' ]);
-
-	if (res.status !== 0)
-	{
-		res = spawnSync('where', [ 'python.exe' ]);
-
-		if (res.status !== 0)
-		{
-			logError('`installMsysMake() | cannot find Python executable');
-
-			exitWithError();
-		}
-	}
-
-	executeCmd(`${String(res.stdout).trim()} worker\\scripts\\getmake.py`);
 }
 
 function ensureDir(dir)
@@ -553,12 +576,16 @@ async function downloadPrebuiltWorker()
 					const resolvedBinPath = path.resolve(WORKER_RELEASE_BIN_PATH);
 
 					execSync(
-						resolvedBinPath,
+						`"${resolvedBinPath}"`,
 						{
 							stdio : [ 'ignore', 'ignore', 'ignore' ],
 							// Ensure no env is passed to avoid accidents.
 							env   : {}
 						}
+					);
+
+					logInfo(
+						'downloadPrebuiltWorker() | fetched mediasoup-worker prebuilt binary is valid for current host'
 					);
 				}
 				catch (error)
@@ -698,19 +725,19 @@ function executeCmd(command, exitOnError = true)
 function logInfo(message)
 {
 	// eslint-disable-next-line no-console
-	console.log(`npm-scripts \x1b[36m[INFO] [${task}]\x1b\[0m`, message);
+	console.log(`npm-scripts.mjs \x1b[36m[INFO] [${task}]\x1b\[0m`, message);
 }
 
 function logWarn(message)
 {
 	// eslint-disable-next-line no-console
-	console.warn(`npm-scripts \x1b[33m[WARN] [${task}]\x1b\[0m`, message);
+	console.warn(`npm-scripts.mjs \x1b[33m[WARN] [${task}]\x1b\[0m`, message);
 }
 
 function logError(message)
 {
 	// eslint-disable-next-line no-console
-	console.error(`npm-scripts \x1b[31m[ERROR] [${task}]\x1b\[0m`, message);
+	console.error(`npm-scripts.mjs \x1b[31m[ERROR] [${task}]\x1b\[0m`, message);
 }
 
 function exitWithError()
