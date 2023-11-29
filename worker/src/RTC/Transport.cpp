@@ -773,7 +773,7 @@ namespace RTC
 						// Create BWE feedback timer
 						if (!this->bweFeedbackTimer)
                         {
-                            this->bweFeedbackTimer = new Timer(this);
+                            this->bweFeedbackTimer = new TimerHandle(this);
                         }
 					}
 				}

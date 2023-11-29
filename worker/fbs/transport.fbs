@@ -46,6 +46,8 @@ table ConsumeRequest {
     producer_id: string (required);
     kind: FBS.RtpParameters.MediaKind;
     rtp_parameters: FBS.RtpParameters.RtpParameters (required);
+    producer_bwe_feedback: bool = false;
+    consumer_rtp_mapping: FBS.Consumer.ConsumerRtpMapping;
     type: FBS.RtpParameters.Type;
     consumable_rtp_encodings: [FBS.RtpParameters.RtpEncodingParameters] (required);
     paused: bool = false;

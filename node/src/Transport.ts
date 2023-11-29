@@ -9,7 +9,7 @@ import { PlainTransportData } from './PlainTransport';
 import { PipeTransportData } from './PipeTransport';
 import { DirectTransportData } from './DirectTransport';
 import { Producer, ProducerOptions, producerTypeFromFbs, producerTypeToFbs } from './Producer';
-import { Consumer, ConsumerLayers, ConsumerOptions, ConsumerType } from './Consumer';
+import { Consumer, ConsumerLayers, ConsumerOptions, ConsumerType, ConsumerRtpMapping, serializeConsumerRtpMapping } from './Consumer';
 import {
 	DataProducer,
 	DataProducerOptions,
@@ -1618,6 +1618,8 @@ function createConsumeRequest({
 	producer,
 	consumerId,
 	rtpParameters,
+	consumerRtpMapping,
+	producerBweFeedback,
 	paused,
 	preferredLayers,
 	ignoreDtx,
@@ -1627,6 +1629,8 @@ function createConsumeRequest({
 	producer: Producer;
 	consumerId: string;
 	rtpParameters: RtpParameters;
+	consumerRtpMapping?: ConsumerRtpMapping;
+	producerBweFeedback?: boolean;
 	paused: boolean;
 	preferredLayers?: ConsumerLayers;
 	ignoreDtx?: boolean;
@@ -1638,6 +1642,7 @@ function createConsumeRequest({
 	const producerIdOffset = builder.createString(producer.id);
 	let consumableRtpEncodingsOffset: number | undefined;
 	let preferredLayersOffset: number | undefined;
+	let consumerRtpMappingOffset: number | undefined;
 
 	if (producer.consumableRtpParameters.encodings)
 	{
@@ -1659,6 +1664,11 @@ function createConsumeRequest({
 		}
 
 		preferredLayersOffset = FbsConsumer.ConsumerLayers.endConsumerLayers(builder);
+	}
+
+	if (consumerRtpMapping)
+	{
+		consumerRtpMappingOffset = serializeConsumerRtpMapping(builder, consumerRtpMapping);
 	}
 
 	const ConsumeRequest = FbsTransport.ConsumeRequest;
@@ -1686,6 +1696,13 @@ function createConsumeRequest({
 	{
 		ConsumeRequest.addPreferredLayers(builder, preferredLayersOffset);
 	}
+
+	if (consumerRtpMappingOffset)
+	{
+		ConsumeRequest.addConsumerRtpMapping(builder, consumerRtpMappingOffset);
+	}
+
+	ConsumeRequest.addProducerBweFeedback(builder, producerBweFeedback || false);
 
 	ConsumeRequest.addIgnoreDtx(builder, Boolean(ignoreDtx));
 

@@ -2,17 +2,17 @@
 #define MS_RTC_CONSUMER_RTP_MAPPING_HPP
 
 #include "RTC/RtpPacket.hpp"
+#include "FBS/transport.h"
 
 namespace RTC
 {
 	class ConsumerRtpMapping
 	{
 	public:
-		ConsumerRtpMapping(json& data);
+		ConsumerRtpMapping(const FBS::Transport::ConsumeRequest* data);
 		~ConsumerRtpMapping();
 
 	public:
-		void FillJson(json& jsonObject) const;
 		void MapRTPHeaderExtensions(RTC::RtpPacket* packet, bool reverse) const;
 
 		uint8_t MapPayloadType(uint8_t payloadType)

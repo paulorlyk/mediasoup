@@ -139,9 +139,6 @@ namespace RTC
 		std::vector<flatbuffers::Offset<FBS::RtpStream::Dump>> rtpStreams;
 		rtpStreams.emplace_back(this->rtpStream->FillBuffer(builder));
 
-      // Add consumerRtpMapping.
-      consumerRtpMapping.FillJson(jsonObject);
-
 		auto dump = FBS::Consumer::CreateConsumerDumpDirect(
 		  builder,
 		  base,

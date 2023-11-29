@@ -24,6 +24,7 @@ import * as FbsRtpStream from './fbs/rtp-stream';
 import * as FbsRtxStream from './fbs/rtx-stream';
 import { Type as FbsRtpParametersType } from './fbs/rtp-parameters';
 import * as FbsRtpParameters from './fbs/rtp-parameters';
+import * as flatbuffers from "flatbuffers";
 
 export type ConsumerOptions<ConsumerAppData extends AppData = AppData> =
 {
@@ -1254,4 +1255,28 @@ function parseConsumerStats(binary: FbsConsumer.GetStatsResponse)
 	: Array<ConsumerStat | ProducerStat>
 {
 	return utils.parseVector(binary, 'stats', parseRtpStreamStats);
+}
+
+export function serializeConsumerRtpMapping(builder: flatbuffers.Builder, consumerRtpMapping: ConsumerRtpMapping): number
+{
+	const codecs = consumerRtpMapping.codecs.map((codec) => {
+		FbsConsumer.ConsumerRtpMappingCodec.startConsumerRtpMappingCodec(builder);
+		FbsConsumer.ConsumerRtpMappingCodec.addPayloadType(builder, codec.payloadType);
+		FbsConsumer.ConsumerRtpMappingCodec.addMappedPayloadType(builder, codec.mappedPayloadType);
+		return FbsConsumer.ConsumerRtpMappingCodec.endConsumerRtpMappingCodec(builder);
+	});
+	const codecsOffset = FbsConsumer.ConsumerRtpMapping.createCodecsVector(builder, codecs);
+
+	const headerExtensions: number[] = consumerRtpMapping.headerExtensions.map((headerExtension) => {
+		FbsConsumer.ConsumerRtpMappingHeaderExtension.startConsumerRtpMappingHeaderExtension(builder);
+		FbsConsumer.ConsumerRtpMappingHeaderExtension.addId(builder, headerExtension.id);
+		FbsConsumer.ConsumerRtpMappingHeaderExtension.addMappedId(builder, headerExtension.mappedId);
+		return FbsConsumer.ConsumerRtpMappingHeaderExtension.endConsumerRtpMappingHeaderExtension(builder);
+	});
+	const headerExtensionsOffset = FbsConsumer.ConsumerRtpMapping.createHeaderExtensionsVector(builder, headerExtensions);
+
+	FbsConsumer.ConsumerRtpMapping.startConsumerRtpMapping(builder);
+	FbsConsumer.ConsumerRtpMapping.addCodecs(builder, codecsOffset);
+	FbsConsumer.ConsumerRtpMapping.addHeaderExtensions(builder, headerExtensionsOffset);
+	return FbsConsumer.ConsumerRtpMapping.endConsumerRtpMapping(builder);
 }

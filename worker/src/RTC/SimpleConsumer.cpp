@@ -23,10 +23,7 @@ namespace RTC
 	{
 		MS_TRACE();
 
-		auto jsonProducerBweFeedbackIt = data.find("producerBweFeedback");
-
-		if (jsonProducerBweFeedbackIt != data.end() && jsonProducerBweFeedbackIt->is_boolean())
-			this->producerBweFeedback = jsonProducerBweFeedbackIt->get<bool>();
+		this->producerBweFeedback = data->producerBweFeedback();
 
 		// Ensure there is a single encoding.
 		if (this->consumableRtpEncodings.size() != 1u)
@@ -80,9 +77,6 @@ namespace RTC
 
 		// Call the parent method.
 		auto base = RTC::Consumer::FillBuffer(builder);
-
-        // Add consumerRtpMapping.
-        consumerRtpMapping.FillJson(jsonObject);
 
 		// Add rtpStream.
 		std::vector<flatbuffers::Offset<FBS::RtpStream::Dump>> rtpStreams;
