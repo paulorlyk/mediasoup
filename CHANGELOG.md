@@ -3,6 +3,42 @@
 
 ### NEXT
 
+* worker: Disable `RtcLogger` usage if not enabled ([PR #1264](https://github.com/versatica/mediasoup/pull/1264)).
+* npm installation: Don't require Python if valid worker prebuilt binary is fetched ([PR #1265](https://github.com/versatica/mediasoup/pull/1265)).
+
+
+### 3.13.11
+
+* liburing: Avoid extra memcpy on RTP ([PR #1258](https://github.com/versatica/mediasoup/pull/1258)).
+* libsrtp: Use our own fork with performance gain ([PR #1260](https://github.com/versatica/mediasoup/pull/1260)).
+* `DataConsumer`: Add `addSubchannel()` and `removeSubchannel()` methods ([PR #1263](https://github.com/versatica/mediasoup/pull/1263)).
+* Fix Rust `DataConsumer` ([PR #1262](https://github.com/versatica/mediasoup/pull/1262)).
+
+
+### 3.13.10
+
+* `tasks.py`: Always include `--no-user` in `pip install` commands to avoid the "can not combine --user and --target" error in Windows ([PR #1257](https://github.com/versatica/mediasoup/pull/1257)).
+
+
+### 3.13.9
+
+* Update worker liburing dependency to 2.4-2 ([PR #1254](https://github.com/versatica/mediasoup/pull/1254)).
+* liburing: Enable by default ([PR 1255](https://github.com/versatica/mediasoup/pull/1255)).
+
+
+### 3.13.8
+
+* liburing: Enable liburing usage for SCTP data delivery ([PR 1249](https://github.com/versatica/mediasoup/pull/1249)).
+* liburing: Disable by default ([PR 1253](https://github.com/versatica/mediasoup/pull/1253)).
+
+
+### 3.13.7
+
+* Update worker dependencies ([PR #1201](https://github.com/versatica/mediasoup/pull/1201)):
+  * abseil-cpp 20230802.0-2
+  * libuv 1.47.0-1
+  * OpenSSL 3.0.8-2
+  * usrsctp snapshot ebb18adac6501bad4501b1f6dccb67a1c85cc299
 * Enable `liburing` usage for Linux (kernel versions >= 6) ([PR #1218](https://github.com/versatica/mediasoup/pull/1218)).
 
 

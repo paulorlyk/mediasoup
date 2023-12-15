@@ -314,11 +314,15 @@ namespace RTC
 	{
 		MS_TRACE();
 
+#ifdef MS_RTC_LOGGER_RTP
 		packet->logger.consumerId = this->id;
+#endif
 
 		if (!IsActive())
 		{
+#ifdef MS_RTC_LOGGER_RTP
 			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::CONSUMER_INACTIVE);
+#endif
 
 			return;
 		}
@@ -331,7 +335,9 @@ namespace RTC
 		{
 			MS_DEBUG_DEV("payload type not supported [payloadType:%" PRIu8 "]", payloadType);
 
+#ifdef MS_RTC_LOGGER_RTP
 			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::UNSUPPORTED_PAYLOAD_TYPE);
+#endif
 
 			return;
 		}
@@ -349,7 +355,9 @@ namespace RTC
 
 			this->rtpSeqManager.Drop(packet->GetSequenceNumber());
 
+#ifdef MS_RTC_LOGGER_RTP
 			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::DROPPED_BY_CODEC);
+#endif
 
 			return;
 		}
@@ -358,7 +366,9 @@ namespace RTC
 		// the packet.
 		if (this->syncRequired && this->keyFrameSupported && !packet->IsKeyFrame())
 		{
+#ifdef MS_RTC_LOGGER_RTP
 			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::NOT_A_KEYFRAME);
+#endif
 
 			return;
 		}
@@ -396,8 +406,10 @@ namespace RTC
 
 		this->consumerRtpMapping.MapRTPHeaderExtensions(packet, false);
 
+#ifdef MS_RTC_LOGGER_RTP
 		packet->logger.sendRtpTimestamp = packet->GetTimestamp();
 		packet->logger.sendSeqNumber    = seq;
+#endif
 
 		if (isSyncPacket)
 		{
