@@ -6,10 +6,11 @@ import { Logger } from './Logger';
 import { EnhancedEventEmitter } from './EnhancedEventEmitter';
 import * as ortc from './ortc';
 import { Channel } from './Channel';
-import { Router, RouterOptions } from './Router';
+import { Router, RouterOptions, socketFlagsToFbs } from './Router';
 import { WebRtcServer, WebRtcServerOptions } from './WebRtcServer';
+import { RtpCodecCapability } from './RtpParameters';
 import { AppData } from './types';
-import { generateUUIDv4, parseVector } from './utils';
+import * as utils from './utils';
 import { Event } from './fbs/notification';
 import * as FbsRequest from './fbs/request';
 import * as FbsWorker from './fbs/worker';
@@ -698,12 +699,13 @@ export class Worker<WorkerAppData extends AppData = AppData>
 				listenInfo.ip,
 				listenInfo.announcedIp,
 				listenInfo.port,
+				socketFlagsToFbs(listenInfo.flags),
 				listenInfo.sendBufferSize,
 				listenInfo.recvBufferSize)
 			);
 		}
 
-		const webRtcServerId = generateUUIDv4();
+		const webRtcServerId = utils.generateUUIDv4();
 
 		const createWebRtcServerRequestOffset = new FbsWorker.CreateWebRtcServerRequestT(
 			webRtcServerId, fbsListenInfos
@@ -747,10 +749,14 @@ export class Worker<WorkerAppData extends AppData = AppData>
 			throw new TypeError('if given, appData must be an object');
 		}
 
-		// This may throw.
-		const rtpCapabilities = ortc.generateRouterRtpCapabilities(mediaCodecs);
+		// Clone given media codecs to not modify input data.
+		const clonedMediaCodecs =
+			utils.clone<RtpCodecCapability[] | undefined>(mediaCodecs);
 
-		const routerId = generateUUIDv4();
+		// This may throw.
+		const rtpCapabilities = ortc.generateRouterRtpCapabilities(clonedMediaCodecs);
+
+		const routerId = utils.generateUUIDv4();
 
 		// Get flatbuffer builder.
 		const createRouterRequestOffset =
@@ -822,12 +828,12 @@ export function parseWorkerDumpResponse(
 {
 	const dump: WorkerDump = {
 		pid                    : binary.pid()!,
-		webRtcServerIds        : parseVector(binary, 'webRtcServerIds'),
-		routerIds              : parseVector(binary, 'routerIds'),
+		webRtcServerIds        : utils.parseVector(binary, 'webRtcServerIds'),
+		routerIds              : utils.parseVector(binary, 'routerIds'),
 		channelMessageHandlers :
 		{
-			channelRequestHandlers      : parseVector(binary.channelMessageHandlers()!, 'channelRequestHandlers'),
-			channelNotificationHandlers : parseVector(binary.channelMessageHandlers()!, 'channelNotificationHandlers')
+			channelRequestHandlers      : utils.parseVector(binary.channelMessageHandlers()!, 'channelRequestHandlers'),
+			channelNotificationHandlers : utils.parseVector(binary.channelMessageHandlers()!, 'channelNotificationHandlers')
 		}
 	};
 

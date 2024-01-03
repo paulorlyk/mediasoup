@@ -903,7 +903,10 @@ impl DataConsumer {
     }
 
     /// Callback is called when the associated data producer is resumed.
-    pub fn on_producer_resume<F: Fn() + Send + Sync + 'static>(&self, callback: F) -> HandlerId {
+    pub fn on_data_producer_resume<F: Fn() + Send + Sync + 'static>(
+        &self,
+        callback: F,
+    ) -> HandlerId {
         self.inner()
             .handlers
             .data_producer_resume
@@ -949,7 +952,7 @@ impl DataConsumer {
 impl DirectDataConsumer {
     /// Sends direct messages from the Rust process.
     pub async fn send(&self, message: WebRtcMessage<'_>) -> Result<(), RequestError> {
-        let (ppid, _payload) = message.into_ppid_and_payload();
+        let (ppid, payload) = message.into_ppid_and_payload();
 
         self.inner
             .channel
@@ -957,7 +960,7 @@ impl DirectDataConsumer {
                 self.inner.id,
                 DataConsumerSendRequest {
                     ppid,
-                    payload: _payload.into_owned(),
+                    payload: payload.into_owned(),
                 },
             )
             .await
