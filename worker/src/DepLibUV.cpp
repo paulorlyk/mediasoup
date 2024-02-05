@@ -3,7 +3,6 @@
 
 #include "DepLibUV.hpp"
 #include "Logger.hpp"
-#include <cstdlib> // std::abort()
 
 namespace {
 int64_t _getRt2HrTimeDiff()

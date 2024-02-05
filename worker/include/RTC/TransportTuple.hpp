@@ -41,7 +41,7 @@ namespace RTC
 
 		explicit TransportTuple(const TransportTuple* tuple)
 		  : hash(tuple->hash), udpSocket(tuple->udpSocket), udpRemoteAddr(tuple->udpRemoteAddr),
-		    tcpConnection(tuple->tcpConnection), localAnnouncedIp(tuple->localAnnouncedIp),
+		    tcpConnection(tuple->tcpConnection), localAnnouncedAddress(tuple->localAnnouncedAddress),
 		    protocol(tuple->protocol)
 		{
 			if (protocol == TransportTuple::Protocol::UDP)
@@ -92,9 +92,9 @@ namespace RTC
 			return this->hash == tuple->hash;
 		}
 
-		void SetLocalAnnouncedIp(std::string& localAnnouncedIp)
+		void SetLocalAnnouncedAddress(std::string& localAnnouncedAddress)
 		{
-			this->localAnnouncedIp = localAnnouncedIp;
+			this->localAnnouncedAddress = localAnnouncedAddress;
 		}
 
 		void Send(const uint8_t* data, size_t len, RTC::TransportTuple::onSendCallback* cb = nullptr)
@@ -190,7 +190,7 @@ namespace RTC
 			{
 				case AF_INET:
 				{
-					auto* remoteSockAddrIn = reinterpret_cast<const struct sockaddr_in*>(remoteSockAddr);
+					const auto* remoteSockAddrIn = reinterpret_cast<const struct sockaddr_in*>(remoteSockAddr);
 
 					const uint64_t address = ntohl(remoteSockAddrIn->sin_addr.s_addr);
 					const uint64_t port    = (ntohs(remoteSockAddrIn->sin_port));
@@ -204,8 +204,10 @@ namespace RTC
 
 				case AF_INET6:
 				{
-					auto* remoteSockAddrIn6 = reinterpret_cast<const struct sockaddr_in6*>(remoteSockAddr);
-					auto* a = reinterpret_cast<const uint32_t*>(std::addressof(remoteSockAddrIn6->sin6_addr));
+					const auto* remoteSockAddrIn6 =
+					  reinterpret_cast<const struct sockaddr_in6*>(remoteSockAddr);
+					const auto* a =
+					  reinterpret_cast<const uint32_t*>(std::addressof(remoteSockAddrIn6->sin6_addr));
 
 					const auto address1 = a[0] ^ a[1] ^ a[2] ^ a[3];
 					const auto address2 = a[0];
@@ -241,9 +243,11 @@ namespace RTC
 		RTC::UdpSocket* udpSocket{ nullptr };
 		struct sockaddr* udpRemoteAddr{ nullptr };
 		RTC::TcpConnection* tcpConnection{ nullptr };
-		std::string localAnnouncedIp;
+		std::string localAnnouncedAddress;
 		// Others.
-		struct sockaddr_storage udpRemoteAddrStorage;
+		struct sockaddr_storage udpRemoteAddrStorage
+		{
+		};
 		Protocol protocol;
 	};
 } // namespace RTC

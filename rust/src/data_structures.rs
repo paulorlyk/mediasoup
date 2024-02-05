@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod tests;
 
-use mediasoup_sys::fbs::{common, rtp_packet, sctp_association, transport, web_rtc_transport};
+use mediasoup_sys::fbs::{
+    common, producer, rtp_packet, sctp_association, transport, web_rtc_transport,
+};
 use serde::de::{MapAccess, Visitor};
 use serde::ser::SerializeStruct;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
@@ -48,17 +50,19 @@ impl AppData {
 /// Listening protocol, IP and port for [`WebRtcServer`](crate::webrtc_server::WebRtcServer) to listen on.
 ///
 /// # Notes on usage
-/// If you use "0.0.0.0" or "::" as ip value, then you need to also provide `announced_ip`.
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Deserialize, Serialize)]
+/// If you use "0.0.0.0" or "::" as ip value, then you need to also provide
+/// `announced_address`.
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListenInfo {
     /// Network protocol.
     pub protocol: Protocol,
     /// Listening IPv4 or IPv6.
     pub ip: IpAddr,
-    /// Announced IPv4 or IPv6 (useful when running mediasoup behind NAT with private IP).
+    /// Announced IPv4, IPv6 or hostname (useful when running mediasoup behind
+    /// NAT with private IP).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub announced_ip: Option<IpAddr>,
+    pub announced_address: Option<String>,
     /// Listening port.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub port: Option<u16>,
@@ -74,14 +78,17 @@ pub struct ListenInfo {
 }
 
 impl ListenInfo {
-    pub(crate) fn to_fbs(self) -> transport::ListenInfo {
+    pub(crate) fn to_fbs(&self) -> transport::ListenInfo {
         transport::ListenInfo {
             protocol: match self.protocol {
                 Protocol::Tcp => transport::Protocol::Tcp,
                 Protocol::Udp => transport::Protocol::Udp,
             },
             ip: self.ip.to_string(),
-            announced_ip: self.announced_ip.map(|ip| ip.to_string()),
+            announced_address: self
+                .announced_address
+                .as_ref()
+                .map(|address| address.to_string()),
             port: self.port.unwrap_or(0),
             flags: Box::new(self.flags.unwrap_or_default().to_fbs()),
             send_buffer_size: self.send_buffer_size.unwrap_or(0),
@@ -160,13 +167,13 @@ impl IceParameters {
 #[serde(rename_all = "lowercase")]
 pub enum IceCandidateType {
     /// The candidate is a host candidate, whose IP address as specified in the
-    /// [`IceCandidate::ip`] property is in fact the true address of the remote peer.
+    /// [`IceCandidate::address`] property is in fact the true address of the remote peer.
     Host,
-    /// The candidate is a server reflexive candidate; the [`IceCandidate::ip`] indicates an
+    /// The candidate is a server reflexive candidate; the [`IceCandidate::address`] indicates an
     /// intermediary address assigned by the STUN server to represent the candidate's peer
     /// anonymously.
     Srflx,
-    /// The candidate is a peer reflexive candidate; the [`IceCandidate::ip`] is an intermediary
+    /// The candidate is a peer reflexive candidate; the [`IceCandidate::address`] is an intermediary
     /// address assigned by the STUN server to represent the candidate's peer anonymously.
     Prflx,
     /// The candidate is a relay candidate, obtained from a TURN server. The relay candidate's IP
@@ -227,8 +234,8 @@ pub struct IceCandidate {
     pub foundation: String,
     /// The assigned priority of the candidate.
     pub priority: u32,
-    /// The IP address of the candidate.
-    pub ip: IpAddr,
+    /// The IP address or hostname of the candidate.
+    pub address: String,
     /// The protocol of the candidate.
     pub protocol: Protocol,
     /// The port for the candidate.
@@ -245,7 +252,7 @@ impl IceCandidate {
         Self {
             foundation: candidate.foundation.clone(),
             priority: candidate.priority,
-            ip: candidate.ip.parse().expect("Error parsing IP address"),
+            address: candidate.address.clone(),
             protocol: Protocol::from_fbs(candidate.protocol),
             port: candidate.port,
             r#type: IceCandidateType::from_fbs(candidate.type_),
@@ -290,14 +297,14 @@ impl IceState {
 /// `PipeTransport`, or via dynamic detection as it happens in `WebRtcTransport` (in which the
 /// remote media address is detected by ICE means), or in `PlainTransport` (when using `comedia`
 /// mode).
-#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Hash, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum TransportTuple {
     /// Transport tuple with remote endpoint info.
     #[serde(rename_all = "camelCase")]
     WithRemote {
-        /// Local IP address.
-        local_ip: IpAddr,
+        /// Local IP address or hostname.
+        local_address: String,
         /// Local port.
         local_port: u16,
         /// Remote IP address.
@@ -310,8 +317,8 @@ pub enum TransportTuple {
     /// Transport tuple without remote endpoint info.
     #[serde(rename_all = "camelCase")]
     LocalOnly {
-        /// Local IP address.
-        local_ip: IpAddr,
+        /// Local IP address or hostname.
+        local_address: String,
         /// Local port.
         local_port: u16,
         /// Protocol
@@ -320,10 +327,10 @@ pub enum TransportTuple {
 }
 
 impl TransportTuple {
-    /// Local IP address.
-    pub fn local_ip(&self) -> IpAddr {
-        let (Self::WithRemote { local_ip, .. } | Self::LocalOnly { local_ip, .. }) = self;
-        *local_ip
+    /// Local IP address or hostname.
+    pub fn local_address(&self) -> &String {
+        let (Self::WithRemote { local_address, .. } | Self::LocalOnly { local_address, .. }) = self;
+        local_address
     }
 
     /// Local port.
@@ -359,19 +366,25 @@ impl TransportTuple {
     pub(crate) fn from_fbs(tuple: &transport::Tuple) -> TransportTuple {
         match &tuple.remote_ip {
             Some(_remote_ip) => TransportTuple::WithRemote {
-                local_ip: tuple.local_ip.parse().expect("Error parsing IP address"),
+                local_address: tuple
+                    .local_address
+                    .parse()
+                    .expect("Error parsing local address"),
                 local_port: tuple.local_port,
                 remote_ip: tuple
                     .remote_ip
                     .as_ref()
                     .unwrap()
                     .parse()
-                    .expect("Error parsing IP address"),
+                    .expect("Error parsing remote IP address"),
                 remote_port: tuple.remote_port,
                 protocol: Protocol::from_fbs(tuple.protocol),
             },
             None => TransportTuple::LocalOnly {
-                local_ip: tuple.local_ip.parse().expect("Error parsing IP address"),
+                local_address: tuple
+                    .local_address
+                    .parse()
+                    .expect("Error parsing local address"),
                 local_port: tuple.local_port,
                 protocol: Protocol::from_fbs(tuple.protocol),
             },
@@ -1259,6 +1272,37 @@ impl BweTraceInfo {
             start_bitrate: info.start_bitrate,
             max_padding_bitrate: info.max_padding_bitrate,
             available_bitrate: info.available_bitrate,
+        }
+    }
+}
+
+/// RTCP Sender Report info in trace event.
+#[derive(Debug, Copy, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SrTraceInfo {
+    /// Stream SSRC
+    ssrc: u32,
+    /// NTP : most significant word
+    ntp_sec: u32,
+    /// NTP : least significant word
+    ntp_frac: u32,
+    /// RTP timestamp
+    rtp_ts: u32,
+    /// Sender packet count
+    packet_count: u32,
+    /// Sender octet count
+    octet_count: u32,
+}
+
+impl SrTraceInfo {
+    pub(crate) fn from_fbs(info: producer::SrTraceInfo) -> Self {
+        Self {
+            ssrc: info.ssrc,
+            ntp_sec: info.ntp_sec,
+            ntp_frac: info.ntp_frac,
+            rtp_ts: info.rtp_ts,
+            packet_count: info.packet_count,
+            octet_count: info.octet_count,
         }
     }
 }

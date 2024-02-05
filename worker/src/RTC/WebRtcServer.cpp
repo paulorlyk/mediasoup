@@ -25,6 +25,30 @@ namespace RTC
 		       std::pow(2, 0) * (256 - IceComponent);
 	}
 
+	/* Class methods. */
+
+	inline std::string WebRtcServer::GetLocalIceUsernameFragmentFromReceivedStunPacket(
+	  RTC::StunPacket* packet)
+	{
+		MS_TRACE();
+
+		// Here we inspect the USERNAME attribute of a received STUN request and
+		// extract its remote usernameFragment (the one given to our IceServer as
+		// local usernameFragment) which is the first value in the attribute value
+		// before the ":" symbol.
+
+		const auto& username  = packet->GetUsername();
+		const size_t colonPos = username.find(':');
+
+		// If no colon is found just return the whole USERNAME attribute anyway.
+		if (colonPos == std::string::npos)
+		{
+			return username;
+		}
+
+		return username.substr(0, colonPos);
+	}
+
 	/* Instance methods. */
 
 	WebRtcServer::WebRtcServer(
@@ -53,11 +77,11 @@ namespace RTC
 				// This may throw.
 				Utils::IP::NormalizeIp(ip);
 
-				std::string announcedIp;
+				std::string announcedAddress;
 
-				if (flatbuffers::IsFieldPresent(listenInfo, FBS::Transport::ListenInfo::VT_ANNOUNCEDIP))
+				if (flatbuffers::IsFieldPresent(listenInfo, FBS::Transport::ListenInfo::VT_ANNOUNCEDADDRESS))
 				{
-					announcedIp = listenInfo->announcedIp()->str();
+					announcedAddress = listenInfo->announcedAddress()->str();
 				}
 
 				RTC::Transport::SocketFlags flags;
@@ -79,7 +103,7 @@ namespace RTC
 						udpSocket = new RTC::UdpSocket(this, ip, flags);
 					}
 
-					this->udpSocketOrTcpServers.emplace_back(udpSocket, nullptr, announcedIp);
+					this->udpSocketOrTcpServers.emplace_back(udpSocket, nullptr, announcedAddress);
 
 					if (listenInfo->sendBufferSize() != 0)
 					{
@@ -111,7 +135,7 @@ namespace RTC
 						tcpServer = new RTC::TcpServer(this, this, ip, flags);
 					}
 
-					this->udpSocketOrTcpServers.emplace_back(nullptr, tcpServer, announcedIp);
+					this->udpSocketOrTcpServers.emplace_back(nullptr, tcpServer, announcedAddress);
 
 					if (listenInfo->sendBufferSize() != 0)
 					{
@@ -265,7 +289,7 @@ namespace RTC
 		}
 	}
 
-	const std::vector<RTC::IceCandidate> WebRtcServer::GetIceCandidates(
+	std::vector<RTC::IceCandidate> WebRtcServer::GetIceCandidates(
 	  bool enableUdp, bool enableTcp, bool preferUdp, bool preferTcp) const
 	{
 		MS_TRACE();
@@ -273,7 +297,7 @@ namespace RTC
 		std::vector<RTC::IceCandidate> iceCandidates;
 		uint16_t iceLocalPreferenceDecrement{ 0 };
 
-		for (auto& item : this->udpSocketOrTcpServers)
+		for (const auto& item : this->udpSocketOrTcpServers)
 		{
 			if (item.udpSocket && enableUdp)
 			{
@@ -284,16 +308,16 @@ namespace RTC
 					iceLocalPreference += 1000;
 				}
 
-				uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
+				const uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
 
-				if (item.announcedIp.empty())
+				if (item.announcedAddress.empty())
 				{
 					iceCandidates.emplace_back(item.udpSocket, icePriority);
 				}
 				else
 				{
 					iceCandidates.emplace_back(
-					  item.udpSocket, icePriority, const_cast<std::string&>(item.announcedIp));
+					  item.udpSocket, icePriority, const_cast<std::string&>(item.announcedAddress));
 				}
 			}
 			else if (item.tcpServer && enableTcp)
@@ -305,16 +329,16 @@ namespace RTC
 					iceLocalPreference += 1000;
 				}
 
-				uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
+				const uint32_t icePriority = generateIceCandidatePriority(iceLocalPreference);
 
-				if (item.announcedIp.empty())
+				if (item.announcedAddress.empty())
 				{
 					iceCandidates.emplace_back(item.tcpServer, icePriority);
 				}
 				else
 				{
 					iceCandidates.emplace_back(
-					  item.tcpServer, icePriority, const_cast<std::string&>(item.announcedIp));
+					  item.tcpServer, icePriority, const_cast<std::string&>(item.announcedAddress));
 				}
 			}
 
@@ -323,28 +347,6 @@ namespace RTC
 		}
 
 		return iceCandidates;
-	}
-
-	inline std::string WebRtcServer::GetLocalIceUsernameFragmentFromReceivedStunPacket(
-	  RTC::StunPacket* packet) const
-	{
-		MS_TRACE();
-
-		// Here we inspect the USERNAME attribute of a received STUN request and
-		// extract its remote usernameFragment (the one given to our IceServer as
-		// local usernameFragment) which is the first value in the attribute value
-		// before the ":" symbol.
-
-		const auto& username  = packet->GetUsername();
-		const size_t colonPos = username.find(':');
-
-		// If no colon is found just return the whole USERNAME attribute anyway.
-		if (colonPos == std::string::npos)
-		{
-			return username;
-		}
-
-		return username.substr(0, colonPos);
 	}
 
 	inline void WebRtcServer::OnPacketReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len)
@@ -389,7 +391,7 @@ namespace RTC
 		}
 
 		// Otherwise try to match the local ICE username fragment.
-		auto key = GetLocalIceUsernameFragmentFromReceivedStunPacket(packet);
+		auto key = WebRtcServer::GetLocalIceUsernameFragmentFromReceivedStunPacket(packet);
 		auto it2 = this->mapLocalIceUsernameFragmentWebRtcTransport.find(key);
 
 		if (it2 == this->mapLocalIceUsernameFragmentWebRtcTransport.end())
@@ -463,7 +465,7 @@ namespace RTC
 	}
 
 	inline void WebRtcServer::OnWebRtcTransportLocalIceUsernameFragmentRemoved(
-	  RTC::WebRtcTransport* webRtcTransport, const std::string& usernameFragment)
+	  RTC::WebRtcTransport* /*webRtcTransport*/, const std::string& usernameFragment)
 	{
 		MS_TRACE();
 
@@ -491,7 +493,7 @@ namespace RTC
 	}
 
 	inline void WebRtcServer::OnWebRtcTransportTransportTupleRemoved(
-	  RTC::WebRtcTransport* webRtcTransport, RTC::TransportTuple* tuple)
+	  RTC::WebRtcTransport* /*webRtcTransport*/, RTC::TransportTuple* tuple)
 	{
 		MS_TRACE();
 

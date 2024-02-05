@@ -28,27 +28,31 @@ namespace RTC
 		struct UdpSocketOrTcpServer
 		{
 			// Expose a constructor to use vector.emplace_back().
-			UdpSocketOrTcpServer(RTC::UdpSocket* udpSocket, RTC::TcpServer* tcpServer, std::string& announcedIp)
-			  : udpSocket(udpSocket), tcpServer(tcpServer), announcedIp(announcedIp)
+			UdpSocketOrTcpServer(
+			  RTC::UdpSocket* udpSocket, RTC::TcpServer* tcpServer, std::string& announcedAddress)
+			  : udpSocket(udpSocket), tcpServer(tcpServer), announcedAddress(announcedAddress)
 			{
 			}
 
 			RTC::UdpSocket* udpSocket;
 			RTC::TcpServer* tcpServer;
-			std::string announcedIp;
+			std::string announcedAddress;
 		};
+
+	private:
+		static std::string GetLocalIceUsernameFragmentFromReceivedStunPacket(RTC::StunPacket* packet);
 
 	public:
 		WebRtcServer(
 		  RTC::Shared* shared,
 		  const std::string& id,
 		  const flatbuffers::Vector<flatbuffers::Offset<FBS::Transport::ListenInfo>>* listenInfos);
-		~WebRtcServer();
+		~WebRtcServer() override;
 
 	public:
 		flatbuffers::Offset<FBS::WebRtcServer::DumpResponse> FillBuffer(
 		  flatbuffers::FlatBufferBuilder& builder) const;
-		const std::vector<RTC::IceCandidate> GetIceCandidates(
+		std::vector<RTC::IceCandidate> GetIceCandidates(
 		  bool enableUdp, bool enableTcp, bool preferUdp, bool preferTcp) const;
 
 		/* Methods inherited from Channel::ChannelSocket::RequestHandler. */
@@ -56,7 +60,6 @@ namespace RTC
 		void HandleRequest(Channel::ChannelRequest* request) override;
 
 	private:
-		std::string GetLocalIceUsernameFragmentFromReceivedStunPacket(RTC::StunPacket* packet) const;
 		void OnPacketReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len);
 		void OnStunDataReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len);
 		void OnNonStunDataReceived(RTC::TransportTuple* tuple, const uint8_t* data, size_t len);

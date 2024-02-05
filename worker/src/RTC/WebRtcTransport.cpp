@@ -55,11 +55,11 @@ namespace RTC
 				// This may throw.
 				Utils::IP::NormalizeIp(ip);
 
-				std::string announcedIp;
+				std::string announcedAddress;
 
-				if (flatbuffers::IsFieldPresent(listenInfo, FBS::Transport::ListenInfo::VT_ANNOUNCEDIP))
+				if (flatbuffers::IsFieldPresent(listenInfo, FBS::Transport::ListenInfo::VT_ANNOUNCEDADDRESS))
 				{
-					announcedIp = listenInfo->announcedIp()->str();
+					announcedAddress = listenInfo->announcedAddress()->str();
 				}
 
 				RTC::Transport::SocketFlags flags;
@@ -84,15 +84,15 @@ namespace RTC
 						udpSocket = new RTC::UdpSocket(this, ip, flags);
 					}
 
-					this->udpSockets[udpSocket] = announcedIp;
+					this->udpSockets[udpSocket] = announcedAddress;
 
-					if (announcedIp.size() == 0)
+					if (announcedAddress.empty())
 					{
 						this->iceCandidates.emplace_back(udpSocket, icePriority);
 					}
 					else
 					{
-						this->iceCandidates.emplace_back(udpSocket, icePriority, announcedIp);
+						this->iceCandidates.emplace_back(udpSocket, icePriority, announcedAddress);
 					}
 
 					if (listenInfo->sendBufferSize() != 0)
@@ -126,15 +126,15 @@ namespace RTC
 						tcpServer = new RTC::TcpServer(this, this, ip, flags);
 					}
 
-					this->tcpServers[tcpServer] = announcedIp;
+					this->tcpServers[tcpServer] = announcedAddress;
 
-					if (announcedIp.size() == 0)
+					if (announcedAddress.empty())
 					{
 						this->iceCandidates.emplace_back(tcpServer, icePriority);
 					}
 					else
 					{
-						this->iceCandidates.emplace_back(tcpServer, icePriority, announcedIp);
+						this->iceCandidates.emplace_back(tcpServer, icePriority, announcedAddress);
 					}
 
 					if (listenInfo->sendBufferSize() != 0)
@@ -341,7 +341,7 @@ namespace RTC
 		// Add dtlsParameters.fingerprints.
 		std::vector<flatbuffers::Offset<FBS::WebRtcTransport::Fingerprint>> fingerprints;
 
-		for (const auto& fingerprint : this->dtlsTransport->GetLocalFingerprints())
+		for (const auto& fingerprint : RTC::DtlsTransport::GetLocalFingerprints())
 		{
 			auto algorithm    = DtlsTransport::AlgorithmToFbs(fingerprint.algorithm);
 			const auto& value = fingerprint.value;
@@ -708,9 +708,9 @@ namespace RTC
 		}
 
 		const uint8_t* data = packet->GetData();
-		auto intLen         = static_cast<int>(packet->GetSize());
+		auto len            = packet->GetSize();
 
-		if (!this->srtpSendSession->EncryptRtp(&data, &intLen))
+		if (!this->srtpSendSession->EncryptRtp(&data, &len))
 		{
 			if (cb)
 			{
@@ -720,8 +720,6 @@ namespace RTC
 
 			return;
 		}
-
-		auto len = static_cast<size_t>(intLen);
 
 		this->iceServer->GetSelectedTuple()->Send(data, len, cb);
 
@@ -739,7 +737,7 @@ namespace RTC
 		}
 
 		const uint8_t* data = packet->GetData();
-		auto intLen         = static_cast<int>(packet->GetSize());
+		auto len            = packet->GetSize();
 
 		// Ensure there is sending SRTP session.
 		if (!this->srtpSendSession)
@@ -749,12 +747,10 @@ namespace RTC
 			return;
 		}
 
-		if (!this->srtpSendSession->EncryptRtcp(&data, &intLen))
+		if (!this->srtpSendSession->EncryptRtcp(&data, &len))
 		{
 			return;
 		}
-
-		auto len = static_cast<size_t>(intLen);
 
 		this->iceServer->GetSelectedTuple()->Send(data, len);
 
@@ -774,7 +770,7 @@ namespace RTC
 		packet->Serialize(RTC::RTCP::Buffer);
 
 		const uint8_t* data = packet->GetData();
-		auto intLen         = static_cast<int>(packet->GetSize());
+		auto len            = packet->GetSize();
 
 		// Ensure there is sending SRTP session.
 		if (!this->srtpSendSession)
@@ -784,12 +780,10 @@ namespace RTC
 			return;
 		}
 
-		if (!this->srtpSendSession->EncryptRtcp(&data, &intLen))
+		if (!this->srtpSendSession->EncryptRtcp(&data, &len))
 		{
 			return;
 		}
-
-		auto len = static_cast<size_t>(intLen);
 
 		this->iceServer->GetSelectedTuple()->Send(data, len);
 
@@ -957,11 +951,9 @@ namespace RTC
 		}
 
 		// Decrypt the SRTP packet.
-		auto intLen = static_cast<int>(len);
-
-		if (!this->srtpRecvSession->DecryptSrtp(const_cast<uint8_t*>(data), &intLen))
+		if (!this->srtpRecvSession->DecryptSrtp(const_cast<uint8_t*>(data), &len))
 		{
-			RTC::RtpPacket* packet = RTC::RtpPacket::Parse(data, static_cast<size_t>(intLen));
+			RTC::RtpPacket* packet = RTC::RtpPacket::Parse(data, len);
 
 			if (!packet)
 			{
@@ -982,7 +974,7 @@ namespace RTC
 			return;
 		}
 
-		RTC::RtpPacket* packet = RTC::RtpPacket::Parse(data, static_cast<size_t>(intLen));
+		RTC::RtpPacket* packet = RTC::RtpPacket::Parse(data, len);
 
 		if (!packet)
 		{
@@ -1028,14 +1020,12 @@ namespace RTC
 		}
 
 		// Decrypt the SRTCP packet.
-		auto intLen = static_cast<int>(len);
-
-		if (!this->srtpRecvSession->DecryptSrtcp(const_cast<uint8_t*>(data), &intLen))
+		if (!this->srtpRecvSession->DecryptSrtcp(const_cast<uint8_t*>(data), &len))
 		{
 			return;
 		}
 
-		RTC::RTCP::Packet* packet = RTC::RTCP::Packet::Parse(data, static_cast<size_t>(intLen));
+		RTC::RTCP::Packet* packet = RTC::RTCP::Packet::Parse(data, len);
 
 		if (!packet)
 		{
