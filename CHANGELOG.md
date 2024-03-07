@@ -1,5 +1,27 @@
 # Changelog
 
+### Next
+
+- Node: Fix missing `bitrateByLayer` field in stats of `RtpRecvStream` in Node ([PR #1349](https://github.com/versatica/mediasoup/pull/1349)).
+- Update worker dependency libuv to 1.48.0.
+
+### 3.13.23
+
+- Fix DTLS packets do not honor configured DTLS MTU (attempt 3) ([PR #1345](https://github.com/versatica/mediasoup/pull/1345)).
+
+### 3.13.22
+
+- Fix wrong publication of mediasoup NPM 3.13.21.
+
+### 3.13.21
+
+- Revert ([PR #1156](https://github.com/versatica/mediasoup/pull/1156)) "Make DTLS fragment stay within MTU size range" because it causes a memory leak ([PR #1342](https://github.com/versatica/mediasoup/pull/1342)).
+
+### 3.13.20
+
+- Add server side ICE consent checks to detect silent WebRTC disconnections ([PR #1332](https://github.com/versatica/mediasoup/pull/1332)).
+- Fix regression (crash) in transport-cc feedback generation ([PR #1339](https://github.com/versatica/mediasoup/pull/1339)).
+
 ### 3.13.19
 
 - Node: Fix `router.createWebRtcTransport()` with `listenIps` ([PR #1330](https://github.com/versatica/mediasoup/pull/1330)).
