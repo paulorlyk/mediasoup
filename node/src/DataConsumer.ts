@@ -92,6 +92,9 @@ export type DataConsumerEvents = {
 	'@dataproducerclose': [];
 };
 
+export type DataConsumerObserver =
+	EnhancedEventEmitter<DataConsumerObserverEvents>;
+
 export type DataConsumerObserverEvents = {
 	close: [];
 	pause: [];
@@ -148,7 +151,8 @@ export class DataConsumer<
 	#appData: DataConsumerAppData;
 
 	// Observer instance.
-	readonly #observer = new EnhancedEventEmitter<DataConsumerObserverEvents>();
+	readonly #observer: DataConsumerObserver =
+		new EnhancedEventEmitter<DataConsumerObserverEvents>();
 
 	/**
 	 * @private
@@ -180,7 +184,7 @@ export class DataConsumer<
 		this.#paused = paused;
 		this.#dataProducerPaused = dataProducerPaused;
 		this.#subchannels = subchannels;
-		this.#appData = appData || ({} as DataConsumerAppData);
+		this.#appData = appData ?? ({} as DataConsumerAppData);
 
 		this.handleWorkerNotifications();
 	}
@@ -272,7 +276,7 @@ export class DataConsumer<
 	/**
 	 * Observer.
 	 */
-	get observer(): EnhancedEventEmitter<DataConsumerObserverEvents> {
+	get observer(): DataConsumerObserver {
 		return this.#observer;
 	}
 

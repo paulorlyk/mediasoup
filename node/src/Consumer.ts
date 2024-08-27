@@ -184,6 +184,8 @@ export type ConsumerEvents = {
 	'@producerclose': [];
 };
 
+export type ConsumerObserver = EnhancedEventEmitter<ConsumerObserverEvents>;
+
 export type ConsumerObserverEvents = {
 	close: [];
 	pause: [];
@@ -335,7 +337,8 @@ export class Consumer<
 	#currentLayers?: ConsumerLayers;
 
 	// Observer instance.
-	readonly #observer = new EnhancedEventEmitter<ConsumerObserverEvents>();
+	readonly #observer: ConsumerObserver =
+		new EnhancedEventEmitter<ConsumerObserverEvents>();
 
 	/**
 	 * @private
@@ -370,7 +373,7 @@ export class Consumer<
 		this.#producerPaused = producerPaused;
 		this.#score = score;
 		this.#preferredLayers = preferredLayers;
-		this.#appData = appData || ({} as ConsumerAppData);
+		this.#appData = appData ?? ({} as ConsumerAppData);
 
 		this.handleWorkerNotifications();
 	}
@@ -476,7 +479,7 @@ export class Consumer<
 	/**
 	 * Observer.
 	 */
-	get observer(): EnhancedEventEmitter<ConsumerObserverEvents> {
+	get observer(): ConsumerObserver {
 		return this.#observer;
 	}
 
@@ -570,7 +573,7 @@ export class Consumer<
 	/**
 	 * Get Consumer stats.
 	 */
-	async getStats(): Promise<Array<ConsumerStat | ProducerStat>> {
+	async getStats(): Promise<(ConsumerStat | ProducerStat)[]> {
 		logger.debug('getStats()');
 
 		const response = await this.#channel.request(
@@ -656,7 +659,7 @@ export class Consumer<
 			FbsConsumer.ConsumerLayers.createConsumerLayers(
 				builder,
 				spatialLayer,
-				temporalLayer !== undefined ? temporalLayer : null
+				temporalLayer ?? null
 			);
 		const requestOffset =
 			FbsConsumer.SetPreferredLayersRequest.createSetPreferredLayersRequest(
@@ -683,10 +686,7 @@ export class Consumer<
 			if (status.preferredLayers) {
 				preferredLayers = {
 					spatialLayer: status.preferredLayers.spatialLayer,
-					temporalLayer:
-						status.preferredLayers.temporalLayer !== null
-							? status.preferredLayers.temporalLayer
-							: undefined,
+					temporalLayer: status.preferredLayers.temporalLayer ?? undefined,
 				};
 			}
 		}
@@ -849,7 +849,7 @@ export class Consumer<
 
 						data!.body(notification);
 
-						const score: ConsumerScore = notification!.score()!.unpack();
+						const score: ConsumerScore = notification.score()!.unpack();
 
 						this.#score = score;
 
@@ -862,7 +862,7 @@ export class Consumer<
 					}
 
 					case Event.CONSUMER_LAYERS_CHANGE: {
-						const notification = new FbsConsumer.LayersChangeNotification()!;
+						const notification = new FbsConsumer.LayersChangeNotification();
 
 						data!.body(notification);
 
@@ -1208,7 +1208,7 @@ function parseConsumerDumpResponse(
 
 function parseConsumerStats(
 	binary: FbsConsumer.GetStatsResponse
-): Array<ConsumerStat | ProducerStat> {
+): (ConsumerStat | ProducerStat)[] {
 	return utils.parseVector(binary, 'stats', parseRtpStreamStats);
 }
 

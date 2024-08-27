@@ -367,11 +367,11 @@ namespace RTC
 
 		MS_DEBUG_TAG(simulcast, "first SenderReport [ssrc:%" PRIu32 "]", rtpStream->GetSsrc());
 
-		// If our current selected RTP stream does not yet have SR, do nothing since
-		// we know we won't be able to switch.
-		auto* producerCurrentRtpStream = GetProducerCurrentRtpStream();
+		// If our RTP timestamp reference stream does not yet have SR, do nothing
+		// since we know we won't be able to switch.
+		auto* producerTsReferenceRtpStream = GetProducerTsReferenceRtpStream();
 
-		if (!producerCurrentRtpStream || !producerCurrentRtpStream->GetSenderReportNtpMs())
+		if (!producerTsReferenceRtpStream || !producerTsReferenceRtpStream->GetSenderReportNtpMs())
 		{
 			return;
 		}
@@ -473,6 +473,12 @@ namespace RTC
 
 			// Producer stream does not exist. Ignore.
 			if (!producerRtpStream)
+			{
+				continue;
+			}
+
+			// Ignore spatial layers (streams) with score 0.
+			if (producerRtpStream->GetScore() == 0)
 			{
 				continue;
 			}
@@ -788,6 +794,19 @@ namespace RTC
 		{
 #ifdef MS_RTC_LOGGER_RTP
 			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::NOT_A_KEYFRAME);
+#endif
+
+			return;
+		}
+
+		// If the packet belongs to current spatial layer being sent and packet does
+		// not have payload other than padding, then drop it.
+		if (spatialLayer == this->currentSpatialLayer && packet->GetPayloadLength() == 0)
+		{
+			this->rtpSeqManager.Drop(packet->GetSequenceNumber());
+
+#ifdef MS_RTC_LOGGER_RTP
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::EMPTY_PAYLOAD);
 #endif
 
 			return;

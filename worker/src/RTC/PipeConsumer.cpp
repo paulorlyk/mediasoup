@@ -261,6 +261,18 @@ namespace RTC
 			return;
 		}
 
+		// Packets with only padding are not forwarded.
+		if (packet->GetPayloadLength() == 0)
+		{
+			rtpSeqManager.Drop(packet->GetSequenceNumber());
+
+#ifdef MS_RTC_LOGGER_RTP
+			packet->logger.Dropped(RtcLogger::RtpPacket::DropReason::EMPTY_PAYLOAD);
+#endif
+
+			return;
+		}
+
 		// Whether this is the first packet after re-sync.
 		const bool isSyncPacket = syncRequired;
 
